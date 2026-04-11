@@ -1,0 +1,315 @@
+import {
+  geoAlbersUsa,
+  geoEqualEarth,
+  geoMercator,
+  geoPath,
+  type GeoProjection,
+} from 'd3-geo'
+import type { Feature, FeatureCollection, Geometry } from 'geojson'
+import { feature as topojsonFeature } from 'topojson-client'
+import type { GeometryCollection, Topology } from 'topojson-specification'
+
+export type QuizProjection = 'albersUsa' | 'equalEarth' | 'mercator'
+
+export type QuizRegion = {
+  id: string
+  name: string
+  aliases: string[]
+  labelBounds: {
+    height: number
+    width: number
+  }
+  labelPosition: {
+    x: number
+    y: number
+  }
+  path: string
+}
+
+export type MapQuizDefinition = {
+  id: string
+  title: string
+  description: string
+  prompt: string
+  credit: string
+  timeLimitSeconds: number
+  viewBox: {
+    width: number
+    height: number
+  }
+  regions: QuizRegion[]
+}
+
+type BaseQuizOptions = {
+  id: string
+  title: string
+  description: string
+  prompt: string
+  credit: string
+  timeLimitSeconds: number
+}
+
+type GeoQuizOptions = BaseQuizOptions & {
+  aliasesById?: Record<string, string[]>
+  aliasesByName?: Record<string, string[]>
+  features: FeatureCollection<Geometry, Record<string, unknown>>
+  filterFeature?: (
+    feature: Feature<Geometry, Record<string, unknown>>,
+  ) => boolean
+  getId?: (feature: Feature<Geometry, Record<string, unknown>>) => string
+  getName?: (feature: Feature<Geometry, Record<string, unknown>>) => string
+  height?: number
+  padding?: number
+  projection: QuizProjection
+  width?: number
+}
+
+type TopoQuizOptions = Omit<GeoQuizOptions, 'features'> & {
+  objectName: string
+  topology: Topology
+}
+
+type PolygonRegionInput = {
+  aliases?: string[]
+  id: string
+  name: string
+  points: Array<[number, number]>
+}
+
+type PolygonQuizOptions = BaseQuizOptions & {
+  regions: PolygonRegionInput[]
+  viewBox: {
+    width: number
+    height: number
+  }
+}
+
+const DEFAULT_WIDTH = 960
+const DEFAULT_HEIGHT = 620
+const DEFAULT_PADDING = 24
+
+function createProjection(projection: QuizProjection): GeoProjection {
+  switch (projection) {
+    case 'albersUsa':
+      return geoAlbersUsa()
+    case 'mercator':
+      return geoMercator()
+    case 'equalEarth':
+    default:
+      return geoEqualEarth()
+  }
+}
+
+function dedupeAliases(aliases: string[]) {
+  return Array.from(new Set(aliases.filter(Boolean)))
+}
+
+function resolveAliases(
+  id: string,
+  name: string,
+  aliasesById?: Record<string, string[]>,
+  aliasesByName?: Record<string, string[]>,
+) {
+  return dedupeAliases([
+    ...(aliasesById?.[id] ?? []),
+    ...(aliasesByName?.[name] ?? []),
+  ])
+}
+
+function getDefaultFeatureId(feature: Feature<Geometry, Record<string, unknown>>) {
+  const rawId =
+    feature.id ??
+    feature.properties.id ??
+    feature.properties.iso_n3 ??
+    feature.properties.name
+  if (!rawId) {
+    throw new Error('Each feature needs an id or a property that can be used as one.')
+  }
+
+  return String(rawId)
+}
+
+function getDefaultFeatureName(feature: Feature<Geometry, Record<string, unknown>>) {
+  const rawName = feature.properties.name
+  if (!rawName || typeof rawName !== 'string') {
+    throw new Error('Each feature needs a string `name` property.')
+  }
+
+  return rawName
+}
+
+export function createGeoQuiz({
+  aliasesById,
+  aliasesByName,
+  credit,
+  description,
+  features,
+  filterFeature,
+  getId = getDefaultFeatureId,
+  getName = getDefaultFeatureName,
+  height = DEFAULT_HEIGHT,
+  id,
+  padding = DEFAULT_PADDING,
+  projection,
+  prompt,
+  timeLimitSeconds,
+  title,
+  width = DEFAULT_WIDTH,
+}: GeoQuizOptions): MapQuizDefinition {
+  const fittedProjection = createProjection(projection).fitExtent(
+    [
+      [padding, padding],
+      [width - padding, height - padding],
+    ],
+    features,
+  )
+  const pathBuilder = geoPath(fittedProjection)
+
+  const regions = features.features
+    .filter((feature) => (filterFeature ? filterFeature(feature) : true))
+    .flatMap((feature) => {
+    const path = pathBuilder(feature)
+    if (!path) {
+      return []
+    }
+
+    const regionId = getId(feature)
+    const regionName = getName(feature)
+    const [[minX, minY], [maxX, maxY]] = pathBuilder.bounds(feature)
+    const [centroidX, centroidY] = pathBuilder.centroid(feature)
+    const labelPosition =
+      Number.isFinite(centroidX) && Number.isFinite(centroidY)
+        ? { x: centroidX, y: centroidY }
+        : { x: (minX + maxX) / 2, y: (minY + maxY) / 2 }
+
+    return [
+      {
+        aliases: resolveAliases(regionId, regionName, aliasesById, aliasesByName),
+        id: regionId,
+        labelBounds: {
+          height: Math.max(0, maxY - minY),
+          width: Math.max(0, maxX - minX),
+        },
+        labelPosition,
+        name: regionName,
+        path,
+      },
+    ]
+    })
+
+  return {
+    credit,
+    description,
+    id,
+    prompt,
+    regions,
+    timeLimitSeconds,
+    title,
+    viewBox: {
+      height,
+      width,
+    },
+  }
+}
+
+export function createTopoQuiz({
+  objectName,
+  topology,
+  ...rest
+}: TopoQuizOptions): MapQuizDefinition {
+  const object = topology.objects[objectName]
+  if (!object) {
+    throw new Error(`Topology object "${objectName}" was not found.`)
+  }
+
+  const featureCollection = topojsonFeature(
+    topology,
+    object as GeometryCollection,
+  ) as FeatureCollection<Geometry, Record<string, unknown>>
+
+  return createGeoQuiz({
+    ...rest,
+    features: featureCollection,
+  })
+}
+
+function polygonToPath(points: Array<[number, number]>) {
+  if (points.length === 0) {
+    return ''
+  }
+
+  const [firstX, firstY] = points[0]
+  const segments = points
+    .slice(1)
+    .map(([x, y]) => `L ${x} ${y}`)
+    .join(' ')
+
+  return `M ${firstX} ${firstY} ${segments} Z`
+}
+
+function getPolygonBounds(points: Array<[number, number]>) {
+  if (points.length === 0) {
+    return {
+      maxX: 0,
+      maxY: 0,
+      minX: 0,
+      minY: 0,
+    }
+  }
+
+  return points.reduce(
+    (bounds, [x, y]) => ({
+      maxX: Math.max(bounds.maxX, x),
+      maxY: Math.max(bounds.maxY, y),
+      minX: Math.min(bounds.minX, x),
+      minY: Math.min(bounds.minY, y),
+    }),
+    {
+      maxX: points[0][0],
+      maxY: points[0][1],
+      minX: points[0][0],
+      minY: points[0][1],
+    },
+  )
+}
+
+export function createPolygonQuiz({
+  credit,
+  description,
+  id,
+  prompt,
+  regions,
+  timeLimitSeconds,
+  title,
+  viewBox,
+}: PolygonQuizOptions): MapQuizDefinition {
+  return {
+    credit,
+    description,
+    id,
+    prompt,
+    regions: regions.map((region) => ({
+      ...(() => {
+        const bounds = getPolygonBounds(region.points)
+
+        return {
+          aliases: dedupeAliases(region.aliases ?? []),
+          id: region.id,
+          labelBounds: {
+            height: Math.max(0, bounds.maxY - bounds.minY),
+            width: Math.max(0, bounds.maxX - bounds.minX),
+          },
+          labelPosition: {
+            x: (bounds.minX + bounds.maxX) / 2,
+            y: (bounds.minY + bounds.maxY) / 2,
+          },
+          name: region.name,
+          path: polygonToPath(region.points),
+        }
+      })(),
+    })),
+    timeLimitSeconds,
+    title,
+    viewBox,
+  }
+}

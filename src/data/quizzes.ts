@@ -1,0 +1,277 @@
+import type { Topology } from 'topojson-specification'
+import usStatesTopology from 'us-atlas/states-10m.json'
+import regionalCountriesTopology from 'world-atlas/countries-50m.json'
+import worldCountriesTopology from 'world-atlas/countries-110m.json'
+import { createTopoQuiz } from '../lib/quiz-builder.ts'
+
+const usStateAliases: Record<string, string[]> = {
+  Alabama: ['AL'],
+  Alaska: ['AK'],
+  Arizona: ['AZ'],
+  Arkansas: ['AR'],
+  California: ['CA'],
+  Colorado: ['CO'],
+  Connecticut: ['CT'],
+  Delaware: ['DE'],
+  Florida: ['FL'],
+  Georgia: ['GA'],
+  Hawaii: ['HI'],
+  Idaho: ['ID'],
+  Illinois: ['IL'],
+  Indiana: ['IN'],
+  Iowa: ['IA'],
+  Kansas: ['KS'],
+  Kentucky: ['KY'],
+  Louisiana: ['LA'],
+  Maine: ['ME'],
+  Maryland: ['MD'],
+  Massachusetts: ['MA'],
+  Michigan: ['MI'],
+  Minnesota: ['MN'],
+  Mississippi: ['MS'],
+  Missouri: ['MO'],
+  Montana: ['MT'],
+  Nebraska: ['NE'],
+  Nevada: ['NV'],
+  'New Hampshire': ['NH'],
+  'New Jersey': ['NJ'],
+  'New Mexico': ['NM'],
+  'New York': ['NY'],
+  'North Carolina': ['NC'],
+  'North Dakota': ['ND'],
+  Ohio: ['OH'],
+  Oklahoma: ['OK'],
+  Oregon: ['OR'],
+  Pennsylvania: ['PA'],
+  'Rhode Island': ['RI'],
+  'South Carolina': ['SC'],
+  'South Dakota': ['SD'],
+  Tennessee: ['TN'],
+  Texas: ['TX'],
+  Utah: ['UT'],
+  Vermont: ['VT'],
+  Virginia: ['VA'],
+  Washington: ['WA'],
+  'West Virginia': ['WV'],
+  Wisconsin: ['WI'],
+  Wyoming: ['WY'],
+}
+
+const usStateNames = new Set(Object.keys(usStateAliases))
+
+const worldCountryAliases: Record<string, string[]> = {
+  Bahamas: ['The Bahamas'],
+  'Bosnia and Herz.': ['Bosnia and Herzegovina'],
+  Brunei: ['Brunei Darussalam'],
+  Congo: ['Republic of the Congo', 'Congo-Brazzaville'],
+  "Côte d'Ivoire": ['Ivory Coast', "Cote d'Ivoire", 'Cote dIvoire'],
+  Czechia: ['Czech Republic'],
+  'Dem. Rep. Congo': [
+    'DR Congo',
+    'D.R. Congo',
+    'Democratic Republic of the Congo',
+    'Congo-Kinshasa',
+  ],
+  eSwatini: ['Eswatini', 'Swaziland'],
+  Gambia: ['The Gambia'],
+  Korea: ['South Korea', 'North Korea'],
+  Laos: ["Lao People's Democratic Republic", 'Lao PDR'],
+  Macedonia: ['North Macedonia'],
+  Moldova: ['Republic of Moldova'],
+  Myanmar: ['Burma'],
+  'North Korea': [
+    'DPRK',
+    'Democratic People’s Republic of Korea',
+    "Democratic People's Republic of Korea",
+    'Korea, North',
+  ],
+  Palestine: ['State of Palestine'],
+  'South Korea': ['Republic of Korea', 'Korea, South'],
+  Taiwan: ['Republic of China'],
+  Tanzania: ['United Republic of Tanzania'],
+  'Timor-Leste': ['East Timor'],
+  'United Arab Emirates': ['UAE'],
+  'United Kingdom': ['UK', 'U.K.', 'Britain', 'Great Britain'],
+  'United States of America': [
+    'United States',
+    'USA',
+    'U.S.A.',
+    'US',
+    'U.S.',
+    'America',
+  ],
+  Venezuela: ['Venezuela, Bolivarian Republic of'],
+}
+
+const europeCountryNames = new Set([
+  'Albania',
+  'Andorra',
+  'Armenia',
+  'Austria',
+  'Azerbaijan',
+  'Belarus',
+  'Belgium',
+  'Bosnia and Herz.',
+  'Bulgaria',
+  'Croatia',
+  'Cyprus',
+  'Czechia',
+  'Denmark',
+  'Estonia',
+  'Finland',
+  'France',
+  'Georgia',
+  'Germany',
+  'Greece',
+  'Hungary',
+  'Iceland',
+  'Ireland',
+  'Italy',
+  'Kosovo',
+  'Latvia',
+  'Liechtenstein',
+  'Lithuania',
+  'Luxembourg',
+  'Macedonia',
+  'Malta',
+  'Moldova',
+  'Monaco',
+  'Montenegro',
+  'Netherlands',
+  'Norway',
+  'Poland',
+  'Portugal',
+  'Romania',
+  'Russia',
+  'San Marino',
+  'Serbia',
+  'Slovakia',
+  'Slovenia',
+  'Spain',
+  'Sweden',
+  'Switzerland',
+  'Turkey',
+  'Ukraine',
+  'United Kingdom',
+  'Vatican',
+])
+
+const middleEastCountryNames = new Set([
+  'Bahrain',
+  'Cyprus',
+  'Egypt',
+  'Iran',
+  'Iraq',
+  'Israel',
+  'Jordan',
+  'Kuwait',
+  'Lebanon',
+  'Oman',
+  'Palestine',
+  'Qatar',
+  'Saudi Arabia',
+  'Syria',
+  'Turkey',
+  'United Arab Emirates',
+  'Yemen',
+])
+
+const europeCountryAliases: Record<string, string[]> = {
+  ...worldCountryAliases,
+  Netherlands: ['Holland'],
+  Russia: ['Russian Federation'],
+  Turkey: ['Turkiye', 'Türkiye', 'Republic of Turkey', 'Republic of Türkiye'],
+  Vatican: ['Vatican City', 'Holy See'],
+}
+
+const middleEastCountryAliases: Record<string, string[]> = {
+  ...worldCountryAliases,
+  Bahrain: ['Kingdom of Bahrain'],
+  Egypt: ['Arab Republic of Egypt'],
+  Iran: ['Islamic Republic of Iran'],
+  Oman: ['Sultanate of Oman'],
+  Palestine: [
+    'State of Palestine',
+    'Palestinian Territories',
+    'Occupied Palestinian Territories',
+  ],
+  Syria: ['Syrian Arab Republic'],
+  Yemen: ['Republic of Yemen'],
+}
+
+export const quizzes = [
+  createTopoQuiz({
+    aliasesByName: usStateAliases,
+    credit:
+      'US geometry comes from us-atlas. The interaction is inspired by Sporcle picture-click quizzes, but this version grades the whole map in one batch.',
+    description:
+      'Place every US state on the map before grading. You can work in any order and revise placements until you submit.',
+    filterFeature: (feature) =>
+      typeof feature.properties.name === 'string' &&
+      usStateNames.has(feature.properties.name),
+    id: 'us-states',
+    objectName: 'states',
+    projection: 'albersUsa',
+    prompt:
+      'Select a region and then a label, or choose a label first and click the map. Nothing is checked until you hit Grade Map.',
+    timeLimitSeconds: 7 * 60,
+    title: 'Find the US States',
+    topology: usStatesTopology as unknown as Topology,
+  }),
+  createTopoQuiz({
+    aliasesByName: europeCountryAliases,
+    credit:
+      'Europe geometry is filtered from world-atlas at 50m resolution so the microstates remain visible and selectable.',
+    description:
+      'Batch-label Europe on a tighter regional map, including commonly grouped transcontinental countries such as Armenia, Azerbaijan, Georgia, Russia, and Turkey.',
+    filterFeature: (feature) =>
+      typeof feature.properties.name === 'string' &&
+      europeCountryNames.has(feature.properties.name),
+    height: 700,
+    id: 'europe-countries',
+    objectName: 'countries',
+    projection: 'mercator',
+    prompt:
+      'Place every European country before grading. Zoom in for the microstates and island countries when you need more precision.',
+    timeLimitSeconds: 12 * 60,
+    title: 'Countries of Europe',
+    topology: regionalCountriesTopology as unknown as Topology,
+  }),
+  createTopoQuiz({
+    aliasesByName: middleEastCountryAliases,
+    credit:
+      'Middle East geometry is filtered from world-atlas at 50m resolution so the eastern Mediterranean and Gulf states remain easy to target.',
+    description:
+      'Batch-label the Middle East on a regional map spanning Egypt, the Levant, Anatolia, the Arabian Peninsula, and Iran.',
+    filterFeature: (feature) =>
+      typeof feature.properties.name === 'string' &&
+      middleEastCountryNames.has(feature.properties.name),
+    height: 680,
+    id: 'middle-east-countries',
+    objectName: 'countries',
+    projection: 'mercator',
+    prompt:
+      'Place every Middle Eastern country before grading. Zoom in around the Levant and the Gulf when neighboring countries crowd together.',
+    timeLimitSeconds: 8 * 60,
+    title: 'Countries of the Middle East',
+    topology: regionalCountriesTopology as unknown as Topology,
+  }),
+  createTopoQuiz({
+    aliasesByName: worldCountryAliases,
+    credit:
+      'World geometry comes from world-atlas. Search also understands several common country aliases and abbreviations.',
+    description:
+      'Batch-label the world. Search helps for long answer banks, and the map only scores once you commit the full board.',
+    height: 560,
+    id: 'world-countries',
+    objectName: 'countries',
+    projection: 'equalEarth',
+    prompt:
+      'This is the same batch-submission flow at a larger scale: place as many countries as you can, then grade the entire world at once.',
+    timeLimitSeconds: 20 * 60,
+    title: 'Countries of the World',
+    topology: worldCountriesTopology as unknown as Topology,
+  }),
+]
+
+export const defaultQuizId = quizzes[0].id
