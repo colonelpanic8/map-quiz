@@ -156,18 +156,23 @@ export function createGeoQuiz({
   title,
   width = DEFAULT_WIDTH,
 }: GeoQuizOptions): MapQuizDefinition {
+  const filteredFeatures = features.features.filter((feature) =>
+    filterFeature ? filterFeature(feature) : true,
+  )
+  const projectedFeatures: FeatureCollection<Geometry, Record<string, unknown>> = {
+    ...features,
+    features: filteredFeatures,
+  }
   const fittedProjection = createProjection(projection).fitExtent(
     [
       [padding, padding],
       [width - padding, height - padding],
     ],
-    features,
+    projectedFeatures,
   )
   const pathBuilder = geoPath(fittedProjection)
 
-  const regions = features.features
-    .filter((feature) => (filterFeature ? filterFeature(feature) : true))
-    .flatMap((feature) => {
+  const regions = filteredFeatures.flatMap((feature) => {
     const path = pathBuilder(feature)
     if (!path) {
       return []
@@ -195,7 +200,7 @@ export function createGeoQuiz({
         path,
       },
     ]
-    })
+  })
 
   return {
     credit,

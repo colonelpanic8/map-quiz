@@ -1154,7 +1154,7 @@ function App() {
                 <div className="map-selection-header">
                   <div className="map-selection-title">
                     <span className="selection-callout-label">Quick picker</span>
-                    <strong>{regionById[selectedRegionId].name}</strong>
+                    <strong>Selected region</strong>
                     <span className="map-selection-subtitle">
                       {selectedRegionGuess
                         ? `Current: ${selectedRegionGuess.name}`
