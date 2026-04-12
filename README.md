@@ -27,6 +27,16 @@ Build for production with:
 npm run build
 ```
 
+Build the GitHub Pages artifact with Nix:
+
+```bash
+nix build .#github-pages
+```
+
+That output is a static site at the root of `./result`, ready to upload to GitHub Pages.
+
+To use the workflow, set the repository's GitHub Pages source to `GitHub Actions`.
+
 ## Data model
 
 The UI only needs a normalized quiz definition:
@@ -114,3 +124,4 @@ createPolygonQuiz({
 
 - The current sample quizzes are fully local and do not depend on Sporcle assets.
 - The system is intended to be extended to countries, states, provinces, territories, or any other region set that can be represented as polygons.
+- The repository includes a GitHub Actions workflow that builds `.#github-pages` and deploys it to GitHub Pages.

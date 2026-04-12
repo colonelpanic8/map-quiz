@@ -18,10 +18,8 @@
           f {
             pkgs = import nixpkgs { inherit system; };
           });
-    in
-    {
-      packages = forAllSystems ({ pkgs }: {
-        default = pkgs.buildNpmPackage {
+      mkMapQuizPackage = pkgs: { installToRoot ? false }:
+        pkgs.buildNpmPackage {
           pname = "map-quiz";
           version = "0.1.0";
           src = self;
@@ -33,12 +31,23 @@
           installPhase = ''
             runHook preInstall
 
-            mkdir -p $out/share/map-quiz
-            cp -r dist/* $out/share/map-quiz/
+            ${if installToRoot then ''
+              mkdir -p $out
+              cp -r dist/. $out/
+              touch $out/.nojekyll
+            '' else ''
+              mkdir -p $out/share/map-quiz
+              cp -r dist/. $out/share/map-quiz/
+            ''}
 
             runHook postInstall
           '';
         };
+    in
+    {
+      packages = forAllSystems ({ pkgs }: {
+        default = mkMapQuizPackage pkgs { };
+        github-pages = mkMapQuizPackage pkgs { installToRoot = true; };
       });
 
       devShells = forAllSystems ({ pkgs }: {
