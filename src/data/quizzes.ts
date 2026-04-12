@@ -1,4 +1,5 @@
-import type { Topology } from 'topojson-specification'
+import { feature as topojsonFeature } from 'topojson-client'
+import type { GeometryCollection, Topology } from 'topojson-specification'
 import usStatesTopology from 'us-atlas/states-10m.json'
 import regionalCountriesTopology from 'world-atlas/countries-50m.json'
 import worldCountriesTopology from 'world-atlas/countries-110m.json'
@@ -60,9 +61,15 @@ const usStateAliases: Record<string, string[]> = {
 const usStateNames = new Set(Object.keys(usStateAliases))
 
 const worldCountryAliases: Record<string, string[]> = {
+  Andorra: ['Principality of Andorra'],
+  'Antigua and Barb.': ['Antigua and Barbuda'],
   Bahamas: ['The Bahamas'],
+  Bahrain: ['Kingdom of Bahrain'],
+  Barbados: ['Republic of Barbados'],
   'Bosnia and Herz.': ['Bosnia and Herzegovina'],
   Brunei: ['Brunei Darussalam'],
+  'Cabo Verde': ['Cape Verde', 'Republic of Cabo Verde'],
+  Comoros: ['Union of the Comoros'],
   Congo: ['Republic of the Congo', 'Congo-Brazzaville'],
   "Côte d'Ivoire": ['Ivory Coast', "Cote d'Ivoire", 'Cote dIvoire'],
   Czechia: ['Czech Republic'],
@@ -73,23 +80,50 @@ const worldCountryAliases: Record<string, string[]> = {
     'Congo-Kinshasa',
   ],
   eSwatini: ['Eswatini', 'Swaziland'],
+  Dominica: ['Commonwealth of Dominica'],
   Gambia: ['The Gambia'],
+  Grenada: ['State of Grenada'],
+  Kiribati: ['Republic of Kiribati'],
   Korea: ['South Korea', 'North Korea'],
   Laos: ["Lao People's Democratic Republic", 'Lao PDR'],
+  Liechtenstein: ['Principality of Liechtenstein'],
   Macedonia: ['North Macedonia'],
+  Maldives: ['Republic of Maldives'],
+  Malta: ['Republic of Malta'],
+  'Marshall Is.': ['Marshall Islands', 'Republic of the Marshall Islands'],
+  Mauritius: ['Republic of Mauritius'],
+  Micronesia: ['Federated States of Micronesia', 'FSM'],
   Moldova: ['Republic of Moldova'],
+  Monaco: ['Principality of Monaco'],
   Myanmar: ['Burma'],
+  Nauru: ['Republic of Nauru'],
   'North Korea': [
     'DPRK',
     'Democratic People’s Republic of Korea',
     "Democratic People's Republic of Korea",
     'Korea, North',
   ],
+  Palau: ['Republic of Palau'],
   Palestine: ['State of Palestine'],
+  'Saint Lucia': ['St. Lucia'],
+  Samoa: ['Independent State of Samoa'],
+  'San Marino': ['Republic of San Marino'],
+  Seychelles: ['Republic of Seychelles'],
+  Singapore: ['Republic of Singapore'],
   'South Korea': ['Republic of Korea', 'Korea, South'],
+  'St. Kitts and Nevis': ['Saint Kitts and Nevis'],
+  'St. Vin. and Gren.': [
+    'Saint Vincent and the Grenadines',
+    'St. Vincent and the Grenadines',
+  ],
+  'São Tomé and Principe': [
+    'Sao Tome and Principe',
+    'Democratic Republic of Sao Tome and Principe',
+  ],
   Taiwan: ['Republic of China'],
   Tanzania: ['United Republic of Tanzania'],
   'Timor-Leste': ['East Timor'],
+  Tonga: ['Kingdom of Tonga'],
   'United Arab Emirates': ['UAE'],
   'United Kingdom': ['UK', 'U.K.', 'Britain', 'Great Britain'],
   'United States of America': [
@@ -101,7 +135,64 @@ const worldCountryAliases: Record<string, string[]> = {
     'America',
   ],
   Venezuela: ['Venezuela, Bolivarian Republic of'],
+  Vatican: ['Vatican City', 'Holy See'],
 }
+
+const worldCountryExtraNames = new Set([
+  'Andorra',
+  'Antigua and Barb.',
+  'Bahrain',
+  'Barbados',
+  'Cabo Verde',
+  'Comoros',
+  'Dominica',
+  'Grenada',
+  'Kiribati',
+  'Liechtenstein',
+  'Maldives',
+  'Malta',
+  'Marshall Is.',
+  'Mauritius',
+  'Micronesia',
+  'Monaco',
+  'Nauru',
+  'Palau',
+  'Saint Lucia',
+  'Samoa',
+  'San Marino',
+  'Seychelles',
+  'Singapore',
+  'St. Kitts and Nevis',
+  'St. Vin. and Gren.',
+  'São Tomé and Principe',
+  'Tonga',
+  'Vatican',
+])
+
+function getTopologyFeatureNames(topology: Topology, objectName: string) {
+  const object = topology.objects[objectName]
+  if (!object) {
+    throw new Error(`Topology object "${objectName}" was not found.`)
+  }
+
+  return (
+    topojsonFeature(topology, object as GeometryCollection) as {
+      features: Array<{ properties?: { name?: unknown } }>
+    }
+  ).features.flatMap((feature) =>
+    typeof feature.properties?.name === 'string' ? [feature.properties.name] : [],
+  )
+}
+
+// Start from the existing 110m world set, then add the sovereign microstates and
+// island countries that only appear in the higher-detail 50m atlas.
+const worldCountryNames = new Set([
+  ...getTopologyFeatureNames(
+    worldCountriesTopology as unknown as Topology,
+    'countries',
+  ),
+  ...worldCountryExtraNames,
+])
 
 const europeCountryNames = new Set([
   'Albania',
@@ -447,18 +538,21 @@ export const quizzes = [
   createTopoQuiz({
     aliasesByName: worldCountryAliases,
     credit:
-      'World geometry comes from world-atlas. Search also understands several common country aliases and abbreviations.',
+      'World geometry is filtered from world-atlas at 50m resolution so microstates and island countries stay on the board without bringing in non-sovereign territories.',
     description:
-      'Batch-label the world. Search helps for long answer banks, and the map only scores once you commit the full board.',
+      'Batch-label the world with a fuller sovereign-country set, including small states that disappear at coarser map resolutions.',
+    filterFeature: (feature) =>
+      typeof feature.properties.name === 'string' &&
+      worldCountryNames.has(feature.properties.name),
     height: 560,
     id: 'world-countries',
     objectName: 'countries',
-    projection: 'equalEarth',
+    projection: 'naturalEarth1',
     prompt:
-      'This is the same batch-submission flow at a larger scale: place as many countries as you can, then grade the entire world at once.',
+      'This is the same batch-submission flow at a larger scale: tiny countries get dot markers when they would otherwise disappear, and the whole board still grades in one batch.',
     timeLimitSeconds: 20 * 60,
     title: 'Countries of the World',
-    topology: worldCountriesTopology as unknown as Topology,
+    topology: regionalCountriesTopology as unknown as Topology,
   }),
 ]
 

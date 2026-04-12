@@ -2,6 +2,7 @@ import {
   geoAlbersUsa,
   geoEqualEarth,
   geoMercator,
+  geoNaturalEarth1,
   geoPath,
   type GeoProjection,
 } from 'd3-geo'
@@ -9,7 +10,11 @@ import type { Feature, FeatureCollection, Geometry } from 'geojson'
 import { feature as topojsonFeature } from 'topojson-client'
 import type { GeometryCollection, Topology } from 'topojson-specification'
 
-export type QuizProjection = 'albersUsa' | 'equalEarth' | 'mercator'
+export type QuizProjection =
+  | 'albersUsa'
+  | 'equalEarth'
+  | 'mercator'
+  | 'naturalEarth1'
 
 export type QuizRegion = {
   id: string
@@ -94,6 +99,8 @@ function createProjection(projection: QuizProjection): GeoProjection {
       return geoAlbersUsa()
     case 'mercator':
       return geoMercator()
+    case 'naturalEarth1':
+      return geoNaturalEarth1()
     case 'equalEarth':
     default:
       return geoEqualEarth()
