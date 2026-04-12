@@ -1,12 +1,12 @@
 import {
   useEffect,
+  useEffectEvent,
   useRef,
   useState,
   type ChangeEvent,
   type FormEvent,
   type MouseEvent as ReactMouseEvent,
   type PointerEvent as ReactPointerEvent,
-  type WheelEvent as ReactWheelEvent,
 } from 'react'
 import clsx from 'clsx'
 import { defaultQuizId, quizzes } from './data/quizzes.ts'
@@ -34,7 +34,6 @@ type DragGesture = {
 type PinchGesture = { distance: number; midpoint: MapPoint }
 
 const MIN_MAP_SCALE = 1
-const MAX_MAP_SCALE = 6
 const MAP_ZOOM_BUTTON_STEP = 1.25
 const DRAG_SUPPRESSION_DISTANCE = 8
 const MAP_SELECTION_MENU_MARGIN = 12
@@ -43,11 +42,24 @@ const MAP_SELECTION_MENU_MAX_HEIGHT = 360
 const MAP_SELECTION_MENU_RESERVED_HEIGHT = 132
 const MAP_SELECTION_MENU_ROW_HEIGHT = 46
 const MIN_REGION_LABEL_FONT_SIZE = 7.5
-const MAX_REGION_LABEL_FONT_SIZE = 17
+const BASE_MAX_REGION_LABEL_FONT_SIZE = 17
+const MAX_REGION_LABEL_FONT_SIZE = 24
+const SMALL_REGION_MARKER_MAX_DIMENSION = 18
+const SMALL_REGION_MARKER_THIN_DIMENSION = 10
+const SMALL_REGION_MARKER_THIN_MAX_DIMENSION = 28
+const SMALL_REGION_MARKER_MIN_DOT_RADIUS = 3.4
+const SMALL_REGION_MARKER_MAX_DOT_RADIUS = 6.8
+const SMALL_REGION_MARKER_MIN_HIT_RADIUS = 10.5
 
 type RegionOverlayLabel = {
   fontSize: number
   text: string
+}
+
+type SmallRegionMarker = {
+  dotRadius: number
+  hitRadius: number
+  ringRadius: number
 }
 
 function createDefaultMapTransform(): MapTransform {
@@ -62,7 +74,7 @@ function clampMapTransform(
   transform: MapTransform,
   viewBox: { height: number; width: number },
 ) {
-  const nextScale = clamp(transform.scale, MIN_MAP_SCALE, MAX_MAP_SCALE)
+  const nextScale = Math.max(transform.scale, MIN_MAP_SCALE)
   const minX = viewBox.width * (1 - nextScale)
   const minY = viewBox.height * (1 - nextScale)
 
@@ -79,7 +91,7 @@ function zoomMapTransform(
   anchor: MapPoint,
   viewBox: { height: number; width: number },
 ) {
-  const clampedScale = clamp(nextScale, MIN_MAP_SCALE, MAX_MAP_SCALE)
+  const clampedScale = Math.max(nextScale, MIN_MAP_SCALE)
   const scaleRatio = clampedScale / transform.scale
 
   return clampMapTransform(
@@ -181,6 +193,47 @@ function estimateLabelWidth(text: string, fontSize: number) {
   return text.length * fontSize * 0.58
 }
 
+function getDynamicMaxRegionLabelFontSize(mapScale: number) {
+  return Math.min(
+    MAX_REGION_LABEL_FONT_SIZE,
+    BASE_MAX_REGION_LABEL_FONT_SIZE * Math.pow(mapScale, 0.35),
+  )
+}
+
+function getDynamicMapStrokeWidth(baseWidth: number, mapScale: number) {
+  return baseWidth * clamp(1 / Math.pow(mapScale, 0.42), 0.42, 1)
+}
+
+function getMapStrokeWidth(
+  mapScale: number,
+  options?: { isResultSelected?: boolean; isPreviewSelected?: boolean },
+) {
+  if (options?.isPreviewSelected) {
+    return getDynamicMapStrokeWidth(3.4, mapScale)
+  }
+
+  if (options?.isResultSelected) {
+    return getDynamicMapStrokeWidth(3.2, mapScale)
+  }
+
+  return getDynamicMapStrokeWidth(1.15, mapScale)
+}
+
+function getLabelTextStrokeWidth(fontSize: number) {
+  return clamp(fontSize * 0.22, 1.4, 3.8)
+}
+
+function getLabelBadgeStrokeWidth(fontSize: number) {
+  return clamp(fontSize * 0.08, 0.75, 1.35)
+}
+
+function transformMapPoint(point: MapPoint, transform: MapTransform) {
+  return {
+    x: point.x * transform.scale + transform.x,
+    y: point.y * transform.scale + transform.y,
+  }
+}
+
 function getRegionLabelCandidates(region: QuizRegion) {
   return [
     region.name,
@@ -194,27 +247,26 @@ function getRegionOverlayLabel(
   region: QuizRegion,
   assignedRegion: QuizRegion | null,
   isSelected: boolean,
+  mapScale: number,
 ): RegionOverlayLabel | null {
   if (!assignedRegion) {
     return null
   }
 
-  const availableWidth = Math.max(
-    0,
-    region.labelBounds.width - (isSelected ? 14 : 10),
-  )
-  const availableHeight = Math.max(
-    0,
-    region.labelBounds.height - (isSelected ? 10 : 6),
-  )
+  const scaledWidth = region.labelBounds.width * mapScale
+  const scaledHeight = region.labelBounds.height * mapScale
+  const availableWidth = Math.max(0, scaledWidth - (isSelected ? 16 : 12))
+  const availableHeight = Math.max(0, scaledHeight - (isSelected ? 12 : 8))
 
   if (availableWidth < 18 || availableHeight < 10) {
     return null
   }
 
+  const maxFontSize = getDynamicMaxRegionLabelFontSize(mapScale)
+
   for (const candidate of getRegionLabelCandidates(assignedRegion)) {
     const fontSize = Math.min(
-      MAX_REGION_LABEL_FONT_SIZE,
+      maxFontSize,
       availableHeight * (isSelected ? 0.56 : 0.48),
       availableWidth / Math.max(candidate.length * 0.62, 1),
     )
@@ -228,6 +280,42 @@ function getRegionOverlayLabel(
   }
 
   return null
+}
+
+function getSmallRegionMarker(
+  region: QuizRegion,
+  isSelected: boolean,
+  mapScale: number,
+): SmallRegionMarker | null {
+  const scaledWidth = region.labelBounds.width * mapScale
+  const scaledHeight = region.labelBounds.height * mapScale
+  const maxDimension = Math.max(scaledWidth, scaledHeight)
+  const minDimension = Math.min(scaledWidth, scaledHeight)
+  const needsMarker =
+    maxDimension <= SMALL_REGION_MARKER_MAX_DIMENSION ||
+    (minDimension <= SMALL_REGION_MARKER_THIN_DIMENSION &&
+      maxDimension <= SMALL_REGION_MARKER_THIN_MAX_DIMENSION)
+
+  if (!needsMarker) {
+    return null
+  }
+
+  const sizePressure =
+    1 -
+    clamp(maxDimension / SMALL_REGION_MARKER_THIN_MAX_DIMENSION, 0, 1)
+  const dotRadius = clamp(
+    SMALL_REGION_MARKER_MIN_DOT_RADIUS +
+      sizePressure * 2.6 +
+      (isSelected ? 0.55 : 0),
+    SMALL_REGION_MARKER_MIN_DOT_RADIUS,
+    SMALL_REGION_MARKER_MAX_DOT_RADIUS,
+  )
+
+  return {
+    dotRadius,
+    hitRadius: Math.max(dotRadius + 5.1, SMALL_REGION_MARKER_MIN_HIT_RADIUS),
+    ringRadius: dotRadius + (isSelected ? 3.4 : 2.4),
+  }
 }
 
 function App() {
@@ -246,6 +334,9 @@ function App() {
   const [countedElapsedMs, setCountedElapsedMs] = useState(0)
   const [timerStartedAt, setTimerStartedAt] = useState<number | null>(null)
   const [isMapDragging, setIsMapDragging] = useState(false)
+  const [isMainPanelOpen, setIsMainPanelOpen] = useState(false)
+  const [isBankPanelOpen, setIsBankPanelOpen] = useState(false)
+  const [isResultsPanelOpen, setIsResultsPanelOpen] = useState(false)
   const [mapTransform, setMapTransform] = useState<MapTransform>(() =>
     createDefaultMapTransform(),
   )
@@ -398,10 +489,23 @@ function App() {
   const selectedRegionGuess = selectedRegionGuessId
     ? regionById[selectedRegionGuessId]
     : null
+  const labelOverlayRegions = [...quiz.regions].sort(
+    (left, right) =>
+      Number(selectedRegionId === left.id) - Number(selectedRegionId === right.id),
+  )
   const mapIsReset =
     mapTransform.scale === MIN_MAP_SCALE &&
     mapTransform.x === 0 &&
     mapTransform.y === 0
+  const compactQuizSummary = isSubmitted
+    ? `${correctCount}/${quiz.regions.length} correct`
+    : timerIsActive && remainingSeconds !== null
+      ? `${formatTime(remainingSeconds)} left`
+      : 'Untimed'
+  const compactBankSummary = `${visibleAnswers.length} ${
+    isSubmitted ? 'shown' : 'available'
+  }`
+  const compactResultsSummary = `${incorrectCount} wrong | ${missingCount} blank`
 
   function clearMapGestures() {
     activePointersRef.current.clear()
@@ -550,7 +654,7 @@ function App() {
     )
   }
 
-  function handleMapWheel(event: ReactWheelEvent<SVGSVGElement>) {
+  const handleMapWheel = useEffectEvent((event: WheelEvent) => {
     const anchor = getMapPoint(event.clientX, event.clientY)
     if (!anchor) {
       return
@@ -568,7 +672,24 @@ function App() {
         quiz.viewBox,
       ),
     )
-  }
+  })
+
+  useEffect(() => {
+    const mapSvg = mapSvgRef.current
+    if (!mapSvg) {
+      return
+    }
+
+    const onWheel = (event: WheelEvent) => {
+      handleMapWheel(event)
+    }
+
+    mapSvg.addEventListener('wheel', onWheel, { passive: false })
+
+    return () => {
+      mapSvg.removeEventListener('wheel', onWheel)
+    }
+  }, [])
 
   function handleMapPointerDown(event: ReactPointerEvent<SVGSVGElement>) {
     if (event.pointerType === 'mouse' && event.button !== 0) {
@@ -763,6 +884,7 @@ function App() {
     setCountedElapsedMs(0)
     setTimerStartedAt(null)
     setClockNow(getNow())
+    setIsResultsPanelOpen(false)
     resetMapZoom()
   }
 
@@ -877,6 +999,7 @@ function App() {
     }
     closeSelectionMenu()
     setSubmittedAt(now)
+    setIsResultsPanelOpen(true)
   }
 
   function handleReset() {
@@ -988,56 +1111,10 @@ function App() {
   return (
     <div className="app-shell">
       <main className="workspace">
-        <section className="panel map-panel">
-          <div className="panel-header">
-            <div>
-              <h2>{quiz.title}</h2>
-              <p className="panel-copy">{quiz.prompt}</p>
-            </div>
-            <div className="panel-actions">
-              <button className="button secondary" onClick={handleReset}>
-                Reset
-              </button>
-              <button className="button" onClick={handleGradeMap}>
-                Grade Map
-              </button>
-            </div>
-          </div>
-
+        <section className="map-panel">
           <div
             className="map-stage"
-            style={{
-              aspectRatio: `${quiz.viewBox.width}/${quiz.viewBox.height}`,
-            }}
           >
-            <div className="map-zoom-controls" role="group" aria-label="Map zoom controls">
-              <span className="map-zoom-readout">{mapTransform.scale.toFixed(1)}x</span>
-              <button
-                type="button"
-                className="map-zoom-button"
-                onClick={() => nudgeMapZoom(MAP_ZOOM_BUTTON_STEP)}
-                aria-label="Zoom in"
-              >
-                +
-              </button>
-              <button
-                type="button"
-                className="map-zoom-button"
-                onClick={() => nudgeMapZoom(1 / MAP_ZOOM_BUTTON_STEP)}
-                aria-label="Zoom out"
-                disabled={mapTransform.scale <= MIN_MAP_SCALE}
-              >
-                -
-              </button>
-              <button
-                type="button"
-                className="map-zoom-reset"
-                onClick={resetMapZoom}
-                disabled={mapIsReset}
-              >
-                Reset view
-              </button>
-            </div>
             <svg
               ref={mapSvgRef}
               className={clsx('quiz-map', {
@@ -1051,7 +1128,6 @@ function App() {
               onPointerDown={handleMapPointerDown}
               onPointerMove={handleMapPointerMove}
               onPointerUp={handleMapPointerUp}
-              onWheel={handleMapWheel}
             >
               <rect
                 x="0"
@@ -1068,22 +1144,23 @@ function App() {
                   const guessName = guessId ? regionById[guessId].name : null
                   const regionStatus = getRegionStatus(region.id)
                   const isSelectedRegion = selectedRegionId === region.id
-                  const overlayLabel = getRegionOverlayLabel(
-                    region,
-                    guessId ? regionById[guessId] : null,
-                    isSelectedRegion,
-                  )
+                  const strokeWidth = getMapStrokeWidth(mapTransform.scale, {
+                    isPreviewSelected: !isSubmitted && isSelectedRegion,
+                    isResultSelected: isSubmitted && isSelectedRegion,
+                  })
 
                   return (
                     <g key={region.id} className="map-region-layer">
                       <path
-                      data-region-id={region.id}
-                      d={region.path}
-                      className={clsx('map-region', `status-${regionStatus}`, {
-                        'is-preview-selected': !isSubmitted && isSelectedRegion,
-                        'is-result-selected': isSubmitted && isSelectedRegion,
-                      })}
-                    >
+                        data-region-id={region.id}
+                        d={region.path}
+                        className={clsx('map-region', `status-${regionStatus}`, {
+                          'is-preview-selected': !isSubmitted && isSelectedRegion,
+                          'is-result-selected': isSubmitted && isSelectedRegion,
+                        })}
+                        strokeWidth={strokeWidth}
+                        vectorEffect="non-scaling-stroke"
+                      >
                         <title>
                           {isSubmitted
                             ? `${region.name}${
@@ -1094,45 +1171,107 @@ function App() {
                               : 'Unassigned region'}
                         </title>
                       </path>
+                    </g>
+                  )
+                })}
+              </g>
+              <g>
+                {labelOverlayRegions.map((region) => {
+                  const regionStatus = getRegionStatus(region.id)
+                  const isSelectedRegion = selectedRegionId === region.id
+                  const marker = getSmallRegionMarker(
+                    region,
+                    isSelectedRegion,
+                    mapTransform.scale,
+                  )
+                  if (!marker) {
+                    return null
+                  }
 
-                      {overlayLabel ? (
-                        <g
-                          className={clsx(
-                            'map-region-label',
-                            `status-${regionStatus}`,
-                            {
-                              'is-selected': isSelectedRegion,
-                            },
+                  const markerPosition = transformMapPoint(
+                    region.labelPosition,
+                    mapTransform,
+                  )
+
+                  return (
+                    <g
+                      key={`${region.id}-marker`}
+                      data-region-id={region.id}
+                      className={clsx('map-region-marker', `status-${regionStatus}`, {
+                        'is-preview-selected': !isSubmitted && isSelectedRegion,
+                        'is-result-selected': isSubmitted && isSelectedRegion,
+                      })}
+                      transform={`translate(${markerPosition.x} ${markerPosition.y})`}
+                    >
+                      <circle
+                        className="map-region-marker-hitbox"
+                        r={marker.hitRadius}
+                      />
+                      <circle
+                        className="map-region-marker-ring"
+                        r={marker.ringRadius}
+                      />
+                      <circle
+                        className="map-region-marker-dot"
+                        r={marker.dotRadius}
+                      />
+                      <title>{region.name}</title>
+                    </g>
+                  )
+                })}
+
+                {labelOverlayRegions.map((region) => {
+                  const guessId = assignments[region.id]
+                  const regionStatus = getRegionStatus(region.id)
+                  const isSelectedRegion = selectedRegionId === region.id
+                  const overlayLabel = getRegionOverlayLabel(
+                    region,
+                    guessId ? regionById[guessId] : null,
+                    isSelectedRegion,
+                    mapTransform.scale,
+                  )
+                  if (!overlayLabel) {
+                    return null
+                  }
+
+                  const labelPosition = transformMapPoint(
+                    region.labelPosition,
+                    mapTransform,
+                  )
+                  const labelWidth = estimateLabelWidth(
+                    overlayLabel.text,
+                    overlayLabel.fontSize,
+                  )
+
+                  return (
+                    <g
+                      key={`${region.id}-label`}
+                      className={clsx('map-region-label', `status-${regionStatus}`, {
+                        'is-selected': isSelectedRegion,
+                      })}
+                      transform={`translate(${labelPosition.x} ${labelPosition.y})`}
+                    >
+                      {isSelectedRegion ? (
+                        <rect
+                          x={-(labelWidth / 2 + 7)}
+                          y={-(overlayLabel.fontSize * 0.85)}
+                          width={labelWidth + 14}
+                          height={overlayLabel.fontSize * 1.45}
+                          rx={overlayLabel.fontSize * 0.45}
+                          ry={overlayLabel.fontSize * 0.45}
+                          strokeWidth={getLabelBadgeStrokeWidth(
+                            overlayLabel.fontSize,
                           )}
-                          transform={`translate(${region.labelPosition.x} ${region.labelPosition.y})`}
-                        >
-                          {isSelectedRegion ? (
-                            <rect
-                              x={-(estimateLabelWidth(
-                                overlayLabel.text,
-                                overlayLabel.fontSize,
-                              ) / 2 + 7)}
-                              y={-(overlayLabel.fontSize * 0.85)}
-                              width={
-                                estimateLabelWidth(
-                                  overlayLabel.text,
-                                  overlayLabel.fontSize,
-                                ) + 14
-                              }
-                              height={overlayLabel.fontSize * 1.45}
-                              rx={overlayLabel.fontSize * 0.45}
-                              ry={overlayLabel.fontSize * 0.45}
-                            />
-                          ) : null}
-                          <text
-                            style={{
-                              fontSize: `${overlayLabel.fontSize}px`,
-                            }}
-                          >
-                            {overlayLabel.text}
-                          </text>
-                        </g>
+                        />
                       ) : null}
+                      <text
+                        fontSize={overlayLabel.fontSize}
+                        strokeWidth={getLabelTextStrokeWidth(
+                          overlayLabel.fontSize,
+                        )}
+                      >
+                        {overlayLabel.text}
+                      </text>
                     </g>
                   )
                 })}
@@ -1238,179 +1377,314 @@ function App() {
                 </div>
               </section>
             ) : null}
-          </div>
-
-          <p className="map-hint">
-            Click a region to open the local picker. Scroll or pinch to zoom, then
-            drag once you’re zoomed in.
-          </p>
-
-          <div className="map-selection-summary" aria-live="polite">
-            <span>{selectionSummary}</span>
-            {!isSubmitted && selectedRegionId ? (
+            <div
+              className="map-zoom-controls"
+              role="group"
+              aria-label="Map zoom controls"
+            >
+              <span className="map-zoom-readout">{mapTransform.scale.toFixed(1)}x</span>
               <button
-                className="button ghost map-selection-summary-action"
-                onClick={clearSelectedRegion}
+                type="button"
+                className="map-zoom-button"
+                onClick={() => nudgeMapZoom(MAP_ZOOM_BUTTON_STEP)}
+                aria-label="Zoom in"
               >
-                Clear
+                +
               </button>
-            ) : null}
-          </div>
+              <button
+                type="button"
+                className="map-zoom-button"
+                onClick={() => nudgeMapZoom(1 / MAP_ZOOM_BUTTON_STEP)}
+                aria-label="Zoom out"
+                disabled={mapTransform.scale <= MIN_MAP_SCALE}
+              >
+                -
+              </button>
+              <button
+                type="button"
+                className="map-zoom-reset"
+                onClick={resetMapZoom}
+                disabled={mapIsReset}
+              >
+                Reset view
+              </button>
+            </div>
 
-          <div className="legend-row">
-            <span className="legend-chip preview">Preview</span>
-            <span className="legend-chip idle">Empty</span>
-            <span className="legend-chip assigned">Placed</span>
-            <span className="legend-chip correct">Correct</span>
-            <span className="legend-chip incorrect">Wrong</span>
-            <span className="legend-chip missing">Missing</span>
+            <div className="map-overlay-layer">
+              {isMainPanelOpen ? (
+                <section className="panel overlay-panel main-controls-panel">
+                  <div className="panel-header">
+                    <div>
+                      <span className="selection-callout-label">Map quiz</span>
+                      <h2>{quiz.title}</h2>
+                      <p className="panel-copy">{quiz.prompt}</p>
+                    </div>
+                    <div className="panel-actions">
+                      <button className="button secondary" onClick={handleReset}>
+                        Reset
+                      </button>
+                      <button className="button" onClick={handleGradeMap}>
+                        Grade Map
+                      </button>
+                      <button
+                        type="button"
+                        className="panel-dismiss"
+                        onClick={() => setIsMainPanelOpen(false)}
+                      >
+                        Minimize
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="control-stack">
+                    {quizzes.length > 1 ? (
+                      <div>
+                        <label className="field-label" htmlFor="quiz-picker">
+                          Quiz
+                        </label>
+                        <select
+                          id="quiz-picker"
+                          className="quiz-picker"
+                          value={quiz.id}
+                          onChange={(event) => handleQuizChange(event.target.value)}
+                        >
+                          {quizzes.map((entry) => (
+                            <option key={entry.id} value={entry.id}>
+                              {entry.title}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    ) : null}
+
+                    <label
+                      className="toggle-row compact-toggle-row"
+                      htmlFor="disable-timer"
+                    >
+                      <span className="toggle-copy">
+                        <span className="toggle-label">Disable timer</span>
+                        <span className="toggle-note">Run this board untimed.</span>
+                      </span>
+                      <input
+                        id="disable-timer"
+                        type="checkbox"
+                        checked={isTimerDisabled}
+                        onChange={handleTimerDisabledChange}
+                      />
+                    </label>
+                  </div>
+
+                  <div className="quiz-meta-row" aria-label="Quiz summary">
+                    <span className="quiz-meta-chip">
+                      {assignedCount}/{quiz.regions.length} placed
+                    </span>
+                    <span className="quiz-meta-chip">{compactQuizSummary}</span>
+                    {isSubmitted ? (
+                      <span className="quiz-meta-chip subdued">
+                        {incorrectCount} wrong · {missingCount} blank
+                      </span>
+                    ) : null}
+                  </div>
+
+                  <p className="map-hint">
+                    Click a region to open the local picker. Scroll or pinch to zoom,
+                    then drag once you’re zoomed in. Tiny regions get dot markers
+                    when their shapes would otherwise disappear.
+                  </p>
+
+                  <div className="map-selection-summary" aria-live="polite">
+                    <span>{selectionSummary}</span>
+                    {!isSubmitted && selectedRegionId ? (
+                      <button
+                        className="button ghost map-selection-summary-action"
+                        onClick={clearSelectedRegion}
+                      >
+                        Clear
+                      </button>
+                    ) : null}
+                  </div>
+
+                  <div className="legend-row">
+                    <span className="legend-chip preview">Preview</span>
+                    <span className="legend-chip idle">Empty</span>
+                    <span className="legend-chip assigned">Placed</span>
+                    <span className="legend-chip correct">Correct</span>
+                    <span className="legend-chip incorrect">Wrong</span>
+                    <span className="legend-chip missing">Missing</span>
+                  </div>
+                </section>
+              ) : null}
+
+              {isBankPanelOpen || (isSubmitted && isResultsPanelOpen) ? (
+                <div className="floating-column">
+                  {isBankPanelOpen ? (
+                    <section className="panel overlay-panel bank-panel">
+                      <div className="panel-header compact">
+                        <div>
+                          <h2>Label Bank</h2>
+                        </div>
+                        <div className="panel-header-tools">
+                          <span className="bank-count">{compactBankSummary}</span>
+                          <button
+                            type="button"
+                            className="panel-dismiss"
+                            onClick={() => setIsBankPanelOpen(false)}
+                          >
+                            Minimize
+                          </button>
+                        </div>
+                      </div>
+
+                      <form className="search-form" onSubmit={handleSearchSubmit}>
+                        <input
+                          id="answer-search"
+                          name="answer-search"
+                          type="search"
+                          value={bankQuery}
+                          onChange={(event) => setBankQuery(event.target.value)}
+                          placeholder="Search answers or aliases"
+                        />
+                        <button
+                          type="submit"
+                          className="button secondary"
+                          disabled={
+                            !selectedRegionId ||
+                            visibleAnswers.length === 0 ||
+                            isSubmitted
+                          }
+                        >
+                          Assign first match
+                        </button>
+                      </form>
+
+                      <div className="answer-grid">
+                        {visibleAnswers.map((answer) => {
+                          const answerStatus = getAnswerStatus(answer.id)
+                          const answerStateLabel = getAnswerStateLabel(answer.id)
+
+                          return (
+                            <button
+                              key={answer.id}
+                              className={clsx('answer-chip', `answer-${answerStatus}`, {
+                                'is-selected': selectedAnswerId === answer.id,
+                              })}
+                              onClick={() => handleAnswerClick(answer.id)}
+                              disabled={isSubmitted}
+                            >
+                              <span>{answer.name}</span>
+                              <span className="answer-state">{answerStateLabel}</span>
+                            </button>
+                          )
+                        })}
+
+                        {visibleAnswers.length === 0 ? (
+                          <p className="empty-state">
+                            No labels match that search. Try a full name, an
+                            abbreviation, or a common alias.
+                          </p>
+                        ) : null}
+                      </div>
+                    </section>
+                  ) : null}
+
+                  {isSubmitted && isResultsPanelOpen ? (
+                    <section className="panel overlay-panel results-panel">
+                      <div className="panel-header compact">
+                        <div>
+                          <h2>Results</h2>
+                        </div>
+                        <div className="panel-header-tools">
+                          <span className="bank-count">
+                            {correctCount}/{quiz.regions.length} correct
+                          </span>
+                          <button
+                            type="button"
+                            className="panel-dismiss"
+                            onClick={() => setIsResultsPanelOpen(false)}
+                          >
+                            Minimize
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="results-table-wrapper">
+                        <table className="results-table">
+                          <thead>
+                            <tr>
+                              <th>Region</th>
+                              <th>Your label</th>
+                              <th>Result</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {results.map((result) => (
+                              <tr key={result.id}>
+                                <td>{result.name}</td>
+                                <td>
+                                  {result.guessId
+                                    ? regionById[result.guessId].name
+                                    : 'Blank'}
+                                </td>
+                                <td className={`result-${result.status}`}>
+                                  {result.status}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </section>
+                  ) : null}
+                </div>
+              ) : null}
+            </div>
+
+            <div className="hud-dock">
+              {!isMainPanelOpen ? (
+                <button
+                  type="button"
+                  className="hud-toggle hud-toggle-primary"
+                  onClick={() => setIsMainPanelOpen(true)}
+                  aria-expanded={isMainPanelOpen}
+                >
+                  <span className="hud-toggle-label">Quiz</span>
+                  <strong>{quiz.title}</strong>
+                  <span className="hud-toggle-meta">
+                    {assignedCount}/{quiz.regions.length} placed | {compactQuizSummary}
+                  </span>
+                </button>
+              ) : null}
+
+              {!isBankPanelOpen ? (
+                <button
+                  type="button"
+                  className="hud-toggle"
+                  onClick={() => setIsBankPanelOpen(true)}
+                  aria-expanded={isBankPanelOpen}
+                >
+                  <span className="hud-toggle-label">Labels</span>
+                  <strong>{compactBankSummary}</strong>
+                  <span className="hud-toggle-meta">
+                    Search and assign answers
+                  </span>
+                </button>
+              ) : null}
+
+              {isSubmitted && !isResultsPanelOpen ? (
+                <button
+                  type="button"
+                  className="hud-toggle"
+                  onClick={() => setIsResultsPanelOpen(true)}
+                  aria-expanded={isResultsPanelOpen}
+                >
+                  <span className="hud-toggle-label">Results</span>
+                  <strong>{correctCount}/{quiz.regions.length} correct</strong>
+                  <span className="hud-toggle-meta">{compactResultsSummary}</span>
+                </button>
+              ) : null}
+            </div>
           </div>
         </section>
-
-        <div className="supplemental-panels">
-          <section className="panel quiz-controls-panel">
-            {quizzes.length > 1 ? (
-              <>
-                <label className="field-label" htmlFor="quiz-picker">
-                  Quiz
-                </label>
-                <select
-                  id="quiz-picker"
-                  className="quiz-picker"
-                  value={quiz.id}
-                  onChange={(event) => handleQuizChange(event.target.value)}
-                >
-                  {quizzes.map((entry) => (
-                    <option key={entry.id} value={entry.id}>
-                      {entry.title}
-                    </option>
-                  ))}
-                </select>
-              </>
-            ) : null}
-
-            <label className="toggle-row compact-toggle-row" htmlFor="disable-timer">
-              <span className="toggle-copy">
-                <span className="toggle-label">Disable timer</span>
-                <span className="toggle-note">Run this board untimed.</span>
-              </span>
-              <input
-                id="disable-timer"
-                type="checkbox"
-                checked={isTimerDisabled}
-                onChange={handleTimerDisabledChange}
-              />
-            </label>
-
-            <div className="quiz-meta-row" aria-label="Quiz summary">
-              <span className="quiz-meta-chip">
-                {assignedCount}/{quiz.regions.length} placed
-              </span>
-              <span className="quiz-meta-chip">
-                {isSubmitted
-                  ? `${correctCount}/${quiz.regions.length} correct`
-                  : timerIsActive && remainingSeconds !== null
-                    ? `${formatTime(remainingSeconds)} left`
-                    : 'Untimed'}
-              </span>
-              {isSubmitted ? (
-                <span className="quiz-meta-chip subdued">
-                  {incorrectCount} wrong · {missingCount} blank
-                </span>
-              ) : null}
-            </div>
-          </section>
-
-          <section className="panel">
-            <div className="panel-header compact">
-              <div>
-                <h2>Label Bank</h2>
-              </div>
-              <span className="bank-count">
-                {visibleAnswers.length} {isSubmitted ? 'shown' : 'available'}
-              </span>
-            </div>
-
-            <form className="search-form" onSubmit={handleSearchSubmit}>
-              <input
-                id="answer-search"
-                name="answer-search"
-                type="search"
-                value={bankQuery}
-                onChange={(event) => setBankQuery(event.target.value)}
-                placeholder="Search answers or aliases"
-              />
-              <button
-                type="submit"
-                className="button secondary"
-                disabled={!selectedRegionId || visibleAnswers.length === 0 || isSubmitted}
-              >
-                Assign first match
-              </button>
-            </form>
-
-            <div className="answer-grid">
-              {visibleAnswers.map((answer) => {
-                const answerStatus = getAnswerStatus(answer.id)
-                const answerStateLabel = getAnswerStateLabel(answer.id)
-
-                return (
-                  <button
-                    key={answer.id}
-                    className={clsx('answer-chip', `answer-${answerStatus}`, {
-                      'is-selected': selectedAnswerId === answer.id,
-                    })}
-                    onClick={() => handleAnswerClick(answer.id)}
-                    disabled={isSubmitted}
-                  >
-                    <span>{answer.name}</span>
-                    <span className="answer-state">{answerStateLabel}</span>
-                  </button>
-                )
-              })}
-
-              {visibleAnswers.length === 0 ? (
-                <p className="empty-state">
-                  No labels match that search. Try a full name, an abbreviation,
-                  or a common alias.
-                </p>
-              ) : null}
-            </div>
-          </section>
-
-          {isSubmitted ? (
-            <section className="panel results-panel">
-              <div className="panel-header compact">
-                <div>
-                  <h2>Results</h2>
-                </div>
-              </div>
-
-              <div className="results-table-wrapper">
-                <table className="results-table">
-                  <thead>
-                    <tr>
-                      <th>Region</th>
-                      <th>Your label</th>
-                      <th>Result</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {results.map((result) => (
-                      <tr key={result.id}>
-                        <td>{result.name}</td>
-                        <td>
-                          {result.guessId ? regionById[result.guessId].name : 'Blank'}
-                        </td>
-                        <td className={`result-${result.status}`}>{result.status}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </section>
-          ) : null}
-        </div>
       </main>
     </div>
   )
