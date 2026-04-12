@@ -239,7 +239,7 @@ function App() {
   const [selectedAnswerId, setSelectedAnswerId] = useState<string | null>(null)
   const [bankQuery, setBankQuery] = useState('')
   const [pickerQuery, setPickerQuery] = useState('')
-  const [isTimerDisabled, setIsTimerDisabled] = useState(false)
+  const [isTimerDisabled, setIsTimerDisabled] = useState(true)
   const [startedAt, setStartedAt] = useState<number | null>(null)
   const [submittedAt, setSubmittedAt] = useState<number | null>(null)
   const [clockNow, setClockNow] = useState(() => Date.now())

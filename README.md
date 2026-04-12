@@ -116,7 +116,7 @@ createPolygonQuiz({
 
 - Click a region and then a label, or a label and then a region.
 - Placements stay editable until submission.
-- Use the `Disable timer` toggle in the quiz card for untimed rounds.
+- The `Disable timer` toggle starts on by default; uncheck it for timed rounds.
 - Search works against names plus aliases and abbreviations.
 - `Grade Map` checks every region at once.
 
