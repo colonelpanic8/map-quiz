@@ -213,6 +213,31 @@ const africaCountryNames = new Set([
   'eSwatini',
 ])
 
+const southAmericaCountryNames = new Set([
+  'Argentina',
+  'Bolivia',
+  'Brazil',
+  'Chile',
+  'Colombia',
+  'Ecuador',
+  'Guyana',
+  'Paraguay',
+  'Peru',
+  'Suriname',
+  'Uruguay',
+  'Venezuela',
+])
+
+const centralAmericaCountryNames = new Set([
+  'Belize',
+  'Costa Rica',
+  'El Salvador',
+  'Guatemala',
+  'Honduras',
+  'Nicaragua',
+  'Panama',
+])
+
 const middleEastCountryNames = new Set([
   'Bahrain',
   'Cyprus',
@@ -263,6 +288,31 @@ const africaCountryAliases: Record<string, string[]> = {
   ],
   Tunisia: ['Republic of Tunisia'],
   Uganda: ['Republic of Uganda'],
+}
+
+const southAmericaCountryAliases: Record<string, string[]> = {
+  ...worldCountryAliases,
+  Argentina: ['Argentine Republic'],
+  Bolivia: ['Bolivia, Plurinational State of', 'Plurinational State of Bolivia'],
+  Brazil: ['Federative Republic of Brazil'],
+  Chile: ['Republic of Chile'],
+  Colombia: ['Republic of Colombia'],
+  Ecuador: ['Republic of Ecuador'],
+  Guyana: ['Co-operative Republic of Guyana', 'Cooperative Republic of Guyana'],
+  Paraguay: ['Republic of Paraguay'],
+  Peru: ['Republic of Peru'],
+  Suriname: ['Republic of Suriname'],
+  Uruguay: ['Oriental Republic of Uruguay'],
+}
+
+const centralAmericaCountryAliases: Record<string, string[]> = {
+  ...worldCountryAliases,
+  'Costa Rica': ['Republic of Costa Rica'],
+  'El Salvador': ['Republic of El Salvador'],
+  Guatemala: ['Republic of Guatemala'],
+  Honduras: ['Republic of Honduras'],
+  Nicaragua: ['Republic of Nicaragua'],
+  Panama: ['Republic of Panama'],
 }
 
 const middleEastCountryAliases: Record<string, string[]> = {
@@ -335,6 +385,44 @@ export const quizzes = [
       'Place every African country before grading. Zoom in around West Africa, the Horn, and the Gulf of Guinea when borders get dense.',
     timeLimitSeconds: 12 * 60,
     title: 'Countries of Africa',
+    topology: regionalCountriesTopology as unknown as Topology,
+  }),
+  createTopoQuiz({
+    aliasesByName: southAmericaCountryAliases,
+    credit:
+      'South America geometry is filtered from world-atlas at 50m resolution so the continent stays detailed enough for the Andean corridor and the Guianas.',
+    description:
+      'Batch-label the sovereign countries of South America on a continent-scale regional map.',
+    filterFeature: (feature) =>
+      typeof feature.properties.name === 'string' &&
+      southAmericaCountryNames.has(feature.properties.name),
+    height: 760,
+    id: 'south-america-countries',
+    objectName: 'countries',
+    projection: 'mercator',
+    prompt:
+      'Place every South American country before grading. Zoom in along the Andes and the northern coast when neighboring borders get tight.',
+    timeLimitSeconds: 7 * 60,
+    title: 'Countries of South America',
+    topology: regionalCountriesTopology as unknown as Topology,
+  }),
+  createTopoQuiz({
+    aliasesByName: centralAmericaCountryAliases,
+    credit:
+      'Central America geometry is filtered from world-atlas at 50m resolution so the narrow isthmus countries remain distinct and selectable.',
+    description:
+      'Batch-label the sovereign countries of Central America on a regional map from Belize to Panama.',
+    filterFeature: (feature) =>
+      typeof feature.properties.name === 'string' &&
+      centralAmericaCountryNames.has(feature.properties.name),
+    height: 620,
+    id: 'central-america-countries',
+    objectName: 'countries',
+    projection: 'mercator',
+    prompt:
+      'Place every Central American country before grading. Zoom in along the Pacific side and around the Gulf of Honduras when borders get tight.',
+    timeLimitSeconds: 5 * 60,
+    title: 'Countries of Central America',
     topology: regionalCountriesTopology as unknown as Topology,
   }),
   createTopoQuiz({
