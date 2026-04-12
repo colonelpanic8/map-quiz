@@ -451,11 +451,7 @@ export const quizzes = [
       europeCountryNames.has(feature.properties.name),
     height: 700,
     id: 'europe-countries',
-    initialMapTransform: {
-      scale: 1.55,
-      x: -80,
-      y: -200,
-    },
+    initialMapScale: 1.9375,
     objectName: 'countries',
     projection: 'mercator',
     prompt:
