@@ -62,10 +62,6 @@ type SmallRegionMarker = {
   ringRadius: number
 }
 
-function createDefaultMapTransform(): MapTransform {
-  return { scale: 1, x: 0, y: 0 }
-}
-
 function clamp(value: number, minimum: number, maximum: number) {
   return Math.min(Math.max(value, minimum), maximum)
 }
@@ -104,6 +100,23 @@ function zoomMapTransform(
   )
 }
 
+function getQuizDefinition(quizId: string) {
+  return quizzes.find((entry) => entry.id === quizId) ?? quizzes[0]
+}
+
+function getDefaultMapTransform(
+  quiz: Pick<ReturnType<typeof getQuizDefinition>, 'initialMapTransform' | 'viewBox'>,
+): MapTransform {
+  return clampMapTransform(
+    quiz.initialMapTransform ?? {
+      scale: 1,
+      x: 0,
+      y: 0,
+    },
+    quiz.viewBox,
+  )
+}
+
 function getDistance(firstPoint: MapPoint, secondPoint: MapPoint) {
   return Math.hypot(firstPoint.x - secondPoint.x, firstPoint.y - secondPoint.y)
 }
@@ -116,7 +129,7 @@ function getMidpoint(firstPoint: MapPoint, secondPoint: MapPoint) {
 }
 
 function buildEmptyAssignments(quizId: string) {
-  const quiz = quizzes.find((entry) => entry.id === quizId) ?? quizzes[0]
+  const quiz = getQuizDefinition(quizId)
   return Object.fromEntries(quiz.regions.map((region) => [region.id, null]))
 }
 
@@ -319,6 +332,7 @@ function getSmallRegionMarker(
 }
 
 function App() {
+  const defaultQuiz = getQuizDefinition(defaultQuizId)
   const [quizId, setQuizId] = useState(defaultQuizId)
   const [assignments, setAssignments] = useState<AssignmentMap>(() =>
     buildEmptyAssignments(defaultQuizId),
@@ -338,7 +352,7 @@ function App() {
   const [isBankPanelOpen, setIsBankPanelOpen] = useState(false)
   const [isResultsPanelOpen, setIsResultsPanelOpen] = useState(false)
   const [mapTransform, setMapTransform] = useState<MapTransform>(() =>
-    createDefaultMapTransform(),
+    getDefaultMapTransform(defaultQuiz),
   )
   const [selectionMenu, setSelectionMenu] = useState<SelectionMenuState | null>(
     null,
@@ -351,7 +365,8 @@ function App() {
   const suppressRegionClickRef = useRef(false)
   const suppressRegionClickTimeoutRef = useRef<number | null>(null)
 
-  const quiz = quizzes.find((entry) => entry.id === quizId) ?? quizzes[0]
+  const quiz = getQuizDefinition(quizId)
+  const defaultMapTransform = getDefaultMapTransform(quiz)
   const regionById = Object.fromEntries(
     quiz.regions.map((region) => [region.id, region]),
   )
@@ -494,9 +509,9 @@ function App() {
       Number(selectedRegionId === left.id) - Number(selectedRegionId === right.id),
   )
   const mapIsReset =
-    mapTransform.scale === MIN_MAP_SCALE &&
-    mapTransform.x === 0 &&
-    mapTransform.y === 0
+    mapTransform.scale === defaultMapTransform.scale &&
+    mapTransform.x === defaultMapTransform.x &&
+    mapTransform.y === defaultMapTransform.y
   const compactQuizSummary = isSubmitted
     ? `${correctCount}/${quiz.regions.length} correct`
     : timerIsActive && remainingSeconds !== null
@@ -613,7 +628,7 @@ function App() {
 
   function resetMapZoom() {
     clearMapGestures()
-    setMapTransform(createDefaultMapTransform())
+    setMapTransform(defaultMapTransform)
   }
 
   function getRegionIdAtClientPoint(clientX: number, clientY: number) {
@@ -874,6 +889,8 @@ function App() {
   }
 
   function resetQuizState(nextQuizId: string) {
+    const nextQuiz = getQuizDefinition(nextQuizId)
+
     setAssignments(buildEmptyAssignments(nextQuizId))
     setSelectedAnswerId(null)
     setSelectedRegionId(null)
@@ -885,7 +902,8 @@ function App() {
     setTimerStartedAt(null)
     setClockNow(getNow())
     setIsResultsPanelOpen(false)
-    resetMapZoom()
+    clearMapGestures()
+    setMapTransform(getDefaultMapTransform(nextQuiz))
   }
 
   function ensureStarted(now?: number) {

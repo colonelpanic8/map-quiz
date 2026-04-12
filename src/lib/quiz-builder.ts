@@ -39,6 +39,11 @@ export type MapQuizDefinition = {
   prompt: string
   credit: string
   timeLimitSeconds: number
+  initialMapTransform?: {
+    scale: number
+    x: number
+    y: number
+  }
   viewBox: {
     width: number
     height: number
@@ -53,6 +58,11 @@ type BaseQuizOptions = {
   prompt: string
   credit: string
   timeLimitSeconds: number
+  initialMapTransform?: {
+    scale: number
+    x: number
+    y: number
+  }
 }
 
 type GeoQuizOptions = BaseQuizOptions & {
@@ -191,6 +201,7 @@ export function createGeoQuiz({
   getName = getDefaultFeatureName,
   height = DEFAULT_HEIGHT,
   id,
+  initialMapTransform,
   padding = DEFAULT_PADDING,
   projection,
   prompt,
@@ -249,6 +260,7 @@ export function createGeoQuiz({
     credit,
     description,
     id,
+    initialMapTransform,
     prompt,
     regions,
     timeLimitSeconds,
