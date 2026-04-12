@@ -38,7 +38,6 @@ export type MapQuizDefinition = {
   description: string
   prompt: string
   credit: string
-  initialMapScale?: number
   timeLimitSeconds: number
   initialMapTransform?: {
     scale: number
@@ -58,7 +57,6 @@ type BaseQuizOptions = {
   description: string
   prompt: string
   credit: string
-  initialMapScale?: number
   timeLimitSeconds: number
   initialMapTransform?: {
     scale: number
@@ -78,6 +76,7 @@ type GeoQuizOptions = BaseQuizOptions & {
   getName?: (feature: Feature<Geometry, Record<string, unknown>>) => string
   height?: number
   padding?: number
+  projectionScaleFactor?: number
   projection: QuizProjection
   width?: number
 }
@@ -203,9 +202,9 @@ export function createGeoQuiz({
   getName = getDefaultFeatureName,
   height = DEFAULT_HEIGHT,
   id,
-  initialMapScale,
   initialMapTransform,
   padding = DEFAULT_PADDING,
+  projectionScaleFactor = 1,
   projection,
   prompt,
   timeLimitSeconds,
@@ -226,6 +225,9 @@ export function createGeoQuiz({
     ],
     projectedFeatures,
   )
+  if (projectionScaleFactor !== 1) {
+    fittedProjection.scale(fittedProjection.scale() * projectionScaleFactor)
+  }
   const pathBuilder = geoPath(fittedProjection)
 
   const regions = filteredFeatures.flatMap((feature) => {
@@ -263,7 +265,6 @@ export function createGeoQuiz({
     credit,
     description,
     id,
-    initialMapScale,
     initialMapTransform,
     prompt,
     regions,
@@ -341,7 +342,6 @@ export function createPolygonQuiz({
   credit,
   description,
   id,
-  initialMapScale,
   prompt,
   regions,
   timeLimitSeconds,
@@ -352,7 +352,6 @@ export function createPolygonQuiz({
     credit,
     description,
     id,
-    initialMapScale,
     prompt,
     regions: regions.map((region) => ({
       ...(() => {

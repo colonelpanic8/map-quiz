@@ -451,8 +451,8 @@ export const quizzes = [
       europeCountryNames.has(feature.properties.name),
     height: 700,
     id: 'europe-countries',
-    initialMapScale: 1.9375,
     objectName: 'countries',
+    projectionScaleFactor: 1.9375,
     projection: 'mercator',
     prompt:
       'Place every European country before grading. Zoom in for the microstates and island countries when you need more precision.',

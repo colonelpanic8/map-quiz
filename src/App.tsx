@@ -105,32 +105,14 @@ function getQuizDefinition(quizId: string) {
 }
 
 function getDefaultMapTransform(
-  quiz: Pick<
-    ReturnType<typeof getQuizDefinition>,
-    'initialMapScale' | 'initialMapTransform' | 'viewBox'
-  >,
+  quiz: Pick<ReturnType<typeof getQuizDefinition>, 'initialMapTransform' | 'viewBox'>,
 ): MapTransform {
-  const baseTransform =
+  return clampMapTransform(
     quiz.initialMapTransform ?? {
       scale: 1,
       x: 0,
       y: 0,
-    }
-
-  if (quiz.initialMapScale && quiz.initialMapScale !== baseTransform.scale) {
-    return zoomMapTransform(
-      baseTransform,
-      quiz.initialMapScale,
-      {
-        x: quiz.viewBox.width / 2,
-        y: quiz.viewBox.height / 2,
-      },
-      quiz.viewBox,
-    )
-  }
-
-  return clampMapTransform(
-    baseTransform,
+    },
     quiz.viewBox,
   )
 }
