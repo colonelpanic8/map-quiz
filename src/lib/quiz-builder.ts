@@ -4,6 +4,7 @@ import {
   geoMercator,
   geoNaturalEarth1,
   geoPath,
+  type GeoPath,
   type GeoProjection,
 } from 'd3-geo'
 import type { Feature, FeatureCollection, Geometry } from 'geojson'
@@ -92,6 +93,7 @@ type PolygonQuizOptions = BaseQuizOptions & {
 const DEFAULT_WIDTH = 960
 const DEFAULT_HEIGHT = 620
 const DEFAULT_PADDING = 24
+type QuizFeature = Feature<Geometry, Record<string, unknown>>
 
 function createProjection(projection: QuizProjection): GeoProjection {
   switch (projection) {
@@ -145,6 +147,39 @@ function getDefaultFeatureName(feature: Feature<Geometry, Record<string, unknown
   return rawName
 }
 
+function buildFeatureWithGeometry(feature: QuizFeature, geometry: Geometry): QuizFeature {
+  return {
+    ...feature,
+    geometry,
+  }
+}
+
+function getLabelFeature(feature: QuizFeature, pathBuilder: GeoPath): QuizFeature {
+  if (feature.geometry.type !== 'MultiPolygon') {
+    return feature
+  }
+
+  // Detached overseas fragments can distort label placement for sovereign states
+  // like France, so anchor labels to the largest projected polygon instead.
+  let largestPolygonFeature: QuizFeature | null = null
+  let largestPolygonArea = Number.NEGATIVE_INFINITY
+
+  for (const coordinates of feature.geometry.coordinates) {
+    const polygonFeature = buildFeatureWithGeometry(feature, {
+      type: 'Polygon',
+      coordinates,
+    })
+    const polygonArea = pathBuilder.area(polygonFeature)
+
+    if (polygonArea > largestPolygonArea) {
+      largestPolygonArea = polygonArea
+      largestPolygonFeature = polygonFeature
+    }
+  }
+
+  return largestPolygonFeature ?? feature
+}
+
 export function createGeoQuiz({
   aliasesById,
   aliasesByName,
@@ -185,10 +220,11 @@ export function createGeoQuiz({
       return []
     }
 
+    const labelFeature = getLabelFeature(feature, pathBuilder)
     const regionId = getId(feature)
     const regionName = getName(feature)
-    const [[minX, minY], [maxX, maxY]] = pathBuilder.bounds(feature)
-    const [centroidX, centroidY] = pathBuilder.centroid(feature)
+    const [[minX, minY], [maxX, maxY]] = pathBuilder.bounds(labelFeature)
+    const [centroidX, centroidY] = pathBuilder.centroid(labelFeature)
     const labelPosition =
       Number.isFinite(centroidX) && Number.isFinite(centroidY)
         ? { x: centroidX, y: centroidY }
