@@ -868,11 +868,13 @@ function App() {
               onAnswerClick={handleAnswerClick}
               onClearSelectedRegion={clearSelectedRegion}
               onCloseSelectionMenu={closeSelectionMenu}
+              onGradeMap={handleGradeMap}
               onMapPointerCancel={handleMapPointerCancel}
               onMapPointerDown={handleMapPointerDown}
               onMapPointerMove={handleMapPointerMove}
               onMapPointerUp={handleMapPointerUp}
               onPickerQueryChange={setPickerQuery}
+              onReset={handleReset}
               onPickerSearchSubmit={handlePickerSearchSubmit}
               onResetZoom={resetMapZoom}
               onZoomIn={() => nudgeMapZoom(MAP_ZOOM_BUTTON_STEP)}
@@ -904,10 +906,8 @@ function App() {
                   onClearSelectedRegion={clearSelectedRegion}
                   onClearSubsetFilters={clearSubsetFilters}
                   onClose={() => setIsMainPanelOpen(false)}
-                  onGradeMap={handleGradeMap}
                   onProjectionChange={handleProjectionChange}
                   onQuizChange={handleQuizChange}
-                  onReset={handleReset}
                   onSubsetToggle={handleSubsetToggle}
                   onTimerDisabledChange={handleTimerDisabledChange}
                   quiz={quiz}

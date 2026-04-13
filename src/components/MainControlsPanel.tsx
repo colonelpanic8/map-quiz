@@ -22,10 +22,8 @@ type MainControlsPanelProps = {
   onClearSelectedRegion: () => void
   onClearSubsetFilters: () => void
   onClose: () => void
-  onGradeMap: () => void
   onProjectionChange: (projectionId: string) => void
   onQuizChange: (quizId: string) => void
-  onReset: () => void
   onSubsetToggle: (subsetId: string) => void
   onTimerDisabledChange: ChangeEventHandler<HTMLInputElement>
   quiz: MapQuizDefinition
@@ -50,10 +48,8 @@ export function MainControlsPanel({
   onClearSelectedRegion,
   onClearSubsetFilters,
   onClose,
-  onGradeMap,
   onProjectionChange,
   onQuizChange,
-  onReset,
   onSubsetToggle,
   onTimerDisabledChange,
   quiz,
@@ -70,15 +66,15 @@ export function MainControlsPanel({
           <h2>{quiz.title}</h2>
           <p className="panel-copy">{quiz.prompt}</p>
         </div>
-        <div className="panel-actions">
-          <button className="button secondary" onClick={onReset}>
-            Reset
-          </button>
-          <button className="button" onClick={onGradeMap}>
-            Grade Map
-          </button>
-          <button type="button" className="panel-dismiss" onClick={onClose}>
-            Minimize
+        <div className="panel-header-tools">
+          <button
+            type="button"
+            className="panel-dismiss icon-only"
+            onClick={onClose}
+            aria-label="Minimize panel"
+            title="Minimize"
+          >
+            X
           </button>
         </div>
       </div>

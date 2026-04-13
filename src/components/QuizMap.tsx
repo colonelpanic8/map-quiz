@@ -34,11 +34,13 @@ type QuizMapProps = {
   onAnswerClick: (answerId: string) => void
   onClearSelectedRegion: () => void
   onCloseSelectionMenu: (options?: { clearBlankSelection?: boolean }) => void
+  onGradeMap: () => void
   onMapPointerCancel: PointerEventHandler<SVGSVGElement>
   onMapPointerDown: PointerEventHandler<SVGSVGElement>
   onMapPointerMove: PointerEventHandler<SVGSVGElement>
   onMapPointerUp: PointerEventHandler<SVGSVGElement>
   onPickerQueryChange: (value: string) => void
+  onReset: () => void
   onPickerSearchSubmit: FormEventHandler<HTMLFormElement>
   onResetZoom: () => void
   onZoomIn: () => void
@@ -67,11 +69,13 @@ export function QuizMap({
   onAnswerClick,
   onClearSelectedRegion,
   onCloseSelectionMenu,
+  onGradeMap,
   onMapPointerCancel,
   onMapPointerDown,
   onMapPointerMove,
   onMapPointerUp,
   onPickerQueryChange,
+  onReset,
   onPickerSearchSubmit,
   onResetZoom,
   onZoomIn,
@@ -366,6 +370,12 @@ export function QuizMap({
           disabled={mapTransform.scale <= 1}
         >
           -
+        </button>
+        <button type="button" className="map-zoom-action" onClick={onReset}>
+          Reset
+        </button>
+        <button type="button" className="map-zoom-action primary" onClick={onGradeMap}>
+          Grade Map
         </button>
         <button
           type="button"

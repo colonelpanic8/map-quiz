@@ -120,6 +120,18 @@
   text-transform: uppercase;
 }
 
+.panel-dismiss.icon-only {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.2rem;
+  height: 2.2rem;
+  padding: 0;
+  font-size: 1.2rem;
+  line-height: 1;
+  text-transform: none;
+}
+
 .panel-header-tools {
   display: flex;
   align-items: center;
