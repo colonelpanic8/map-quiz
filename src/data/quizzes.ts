@@ -402,6 +402,82 @@ const middleEastCountryNames = new Set([
   'Yemen',
 ])
 
+const southeastAsiaCountryNames = new Set([
+  'Brunei',
+  'Cambodia',
+  'Indonesia',
+  'Laos',
+  'Malaysia',
+  'Myanmar',
+  'Philippines',
+  'Singapore',
+  'Thailand',
+  'Timor-Leste',
+  'Vietnam',
+])
+
+const americasCountryNames = new Set([
+  'Antigua and Barb.',
+  'Argentina',
+  'Bahamas',
+  'Barbados',
+  'Belize',
+  'Bolivia',
+  'Brazil',
+  'Canada',
+  'Chile',
+  'Colombia',
+  'Costa Rica',
+  'Cuba',
+  'Dominica',
+  'Dominican Rep.',
+  'Ecuador',
+  'El Salvador',
+  'Grenada',
+  'Guatemala',
+  'Guyana',
+  'Haiti',
+  'Honduras',
+  'Jamaica',
+  'Mexico',
+  'Nicaragua',
+  'Panama',
+  'Paraguay',
+  'Peru',
+  'Saint Lucia',
+  'St. Kitts and Nevis',
+  'St. Vin. and Gren.',
+  'Suriname',
+  'Trinidad and Tobago',
+  'United States of America',
+  'Uruguay',
+  'Venezuela',
+])
+
+const easternEuropeCountryNames = new Set([
+  'Albania',
+  'Belarus',
+  'Bosnia and Herz.',
+  'Bulgaria',
+  'Croatia',
+  'Czechia',
+  'Estonia',
+  'Hungary',
+  'Kosovo',
+  'Latvia',
+  'Lithuania',
+  'Macedonia',
+  'Moldova',
+  'Montenegro',
+  'Poland',
+  'Romania',
+  'Russia',
+  'Serbia',
+  'Slovakia',
+  'Slovenia',
+  'Ukraine',
+])
+
 const europeCountryAliases: Record<string, string[]> = {
   ...worldCountryAliases,
   Netherlands: ['Holland'],
@@ -619,6 +695,28 @@ const worldCountrySubsetConfigs: QuizSubsetConfig[] = [
     id: 'middle-east',
     regionNames: Array.from(middleEastCountryNames),
     title: 'Middle East',
+  },
+  {
+    description:
+      'Focus on mainland and maritime Southeast Asia from Myanmar through Indonesia and the Philippines.',
+    id: 'southeast-asia',
+    regionNames: Array.from(southeastAsiaCountryNames),
+    title: 'Southeast Asia',
+  },
+  {
+    description:
+      'Focus on the sovereign countries of North America, Central America, the Caribbean, and South America.',
+    id: 'americas',
+    regionNames: Array.from(americasCountryNames),
+    title: 'The Americas',
+  },
+  {
+    description:
+      'Focus on Eastern Europe and the Balkans, while keeping Russia from forcing the reset viewport across all of Siberia.',
+    id: 'eastern-europe',
+    regionNames: Array.from(easternEuropeCountryNames),
+    title: 'Eastern Europe',
+    viewportRegionNames: withoutNames(easternEuropeCountryNames, ['Russia']),
   },
 ]
 
