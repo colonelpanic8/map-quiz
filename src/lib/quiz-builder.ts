@@ -17,6 +17,12 @@ export type QuizProjection =
   | 'mercator'
   | 'naturalEarth1'
 
+export type QuizProjectionOption = {
+  id: QuizProjection
+  label: string
+  quizId: string
+}
+
 export type QuizMapTransform = {
   scale: number
   x: number
@@ -57,6 +63,7 @@ export type QuizSubset = {
 
 export type MapQuizDefinition = {
   id: string
+  parentQuizId?: string
   title: string
   description: string
   prompt: string
@@ -64,6 +71,8 @@ export type MapQuizDefinition = {
   timeLimitSeconds: number
   initialMapTransform?: QuizMapTransform
   defaultActiveSubsetIds?: string[]
+  projectionOptions?: QuizProjectionOption[]
+  selectedProjectionId?: QuizProjection
   subsets?: QuizSubset[]
   viewBox: {
     width: number

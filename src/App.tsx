@@ -111,6 +111,12 @@ function getQuizDefinition(quizId: string) {
   return quizzes.find((entry) => entry.id === quizId) ?? quizzes[0]
 }
 
+function getQuizPickerId(quiz: Pick<MapQuizDefinition, 'id' | 'parentQuizId'>) {
+  return quiz.parentQuizId ?? quiz.id
+}
+
+const quizPickerEntries = quizzes.filter((entry) => !entry.parentQuizId)
+
 function buildRegionById(quiz: MapQuizDefinition) {
   return Object.fromEntries(quiz.regions.map((region) => [region.id, region]))
 }
@@ -687,6 +693,7 @@ function App() {
     isSubmitted ? 'shown' : 'available'
   }`
   const compactResultsSummary = `${incorrectCount} wrong | ${missingCount} blank`
+  const activeProjectionOptions = quiz.projectionOptions ?? []
 
   function clearMapGestures() {
     activePointersRef.current.clear()
@@ -1253,6 +1260,28 @@ function App() {
     resetQuizState(nextQuizId)
   }
 
+  function handleProjectionChange(nextProjectionId: string) {
+    const nextProjection = activeProjectionOptions.find(
+      (option) => option.id === nextProjectionId,
+    )
+    if (!nextProjection || nextProjection.quizId === quiz.id) {
+      return
+    }
+
+    const nextQuiz = getQuizDefinition(nextProjection.quizId)
+    const nextRegionById = buildRegionById(nextQuiz)
+
+    setQuizId(nextProjection.quizId)
+    setSelectedAnswerId(null)
+    setSelectedRegionId(null)
+    setPickerQuery('')
+    setSelectionMenu(null)
+    clearMapGestures()
+    setMapTransform(
+      getDefaultMapTransform(nextQuiz, nextRegionById, activeSubsetIds),
+    )
+  }
+
   function handleSubsetToggle(subsetId: string) {
     const nextActiveSubsetIds = activeSubsetIds.includes(subsetId)
       ? activeSubsetIds.filter((currentSubsetId) => currentSubsetId !== subsetId)
@@ -1677,12 +1706,34 @@ function App() {
                         <select
                           id="quiz-picker"
                           className="quiz-picker"
-                          value={quiz.id}
+                          value={getQuizPickerId(quiz)}
                           onChange={(event) => handleQuizChange(event.target.value)}
                         >
-                          {quizzes.map((entry) => (
+                          {quizPickerEntries.map((entry) => (
                             <option key={entry.id} value={entry.id}>
                               {entry.title}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    ) : null}
+
+                    {activeProjectionOptions.length > 1 ? (
+                      <div>
+                        <label className="field-label" htmlFor="projection-picker">
+                          Projection
+                        </label>
+                        <select
+                          id="projection-picker"
+                          className="quiz-picker"
+                          value={quiz.selectedProjectionId}
+                          onChange={(event) =>
+                            handleProjectionChange(event.target.value)
+                          }
+                        >
+                          {activeProjectionOptions.map((option) => (
+                            <option key={option.id} value={option.id}>
+                              {option.label}
                             </option>
                           ))}
                         </select>
