@@ -497,7 +497,12 @@ export function transformMapPoint(point: MapPoint, transform: MapTransform) {
 }
 
 function getRegionLabelCandidates(region: QuizRegion) {
-  return [region.name, ...region.aliases].filter(Boolean)
+  return [
+    region.name,
+    ...region.aliases
+      .filter((alias) => alias !== region.name)
+      .sort((left, right) => right.length - left.length),
+  ]
 }
 
 export function getRegionOverlayLabel(
@@ -506,31 +511,32 @@ export function getRegionOverlayLabel(
   isSelected: boolean,
   mapScale: number,
 ): RegionOverlayLabel | null {
-  const maxWidth = region.labelBounds.width * mapScale
-  const maxHeight = region.labelBounds.height * mapScale
-  const maxFontSize = Math.min(
-    getDynamicMaxRegionLabelFontSize(mapScale),
-    maxHeight * 0.8,
-  )
-
-  if (maxWidth < 18 || maxHeight < 11 || maxFontSize < MIN_REGION_LABEL_FONT_SIZE) {
+  if (!assignedRegion) {
     return null
   }
 
-  const labelCandidates = assignedRegion
-    ? getRegionLabelCandidates(assignedRegion)
-    : getRegionLabelCandidates(region)
+  const scaledWidth = region.labelBounds.width * mapScale
+  const scaledHeight = region.labelBounds.height * mapScale
+  const availableWidth = Math.max(0, scaledWidth - (isSelected ? 16 : 12))
+  const availableHeight = Math.max(0, scaledHeight - (isSelected ? 12 : 8))
 
-  for (const text of labelCandidates) {
-    const estimatedFontSize = Math.min(
+  if (availableWidth < 18 || availableHeight < 10) {
+    return null
+  }
+
+  const maxFontSize = getDynamicMaxRegionLabelFontSize(mapScale)
+
+  for (const candidate of getRegionLabelCandidates(assignedRegion)) {
+    const fontSize = Math.min(
       maxFontSize,
-      maxWidth / Math.max(estimateLabelWidth(text, 1), 1),
+      availableHeight * (isSelected ? 0.56 : 0.48),
+      availableWidth / Math.max(candidate.length * 0.62, 1),
     )
 
-    if (estimatedFontSize >= MIN_REGION_LABEL_FONT_SIZE) {
+    if (fontSize >= MIN_REGION_LABEL_FONT_SIZE) {
       return {
-        fontSize: isSelected ? estimatedFontSize + 0.5 : estimatedFontSize,
-        text,
+        fontSize,
+        text: candidate,
       }
     }
   }
