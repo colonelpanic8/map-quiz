@@ -278,6 +278,22 @@ const centralAmericaCountryNames = new Set([
   'Panama',
 ])
 
+const caribbeanCountryNames = new Set([
+  'Antigua and Barb.',
+  'Bahamas',
+  'Barbados',
+  'Cuba',
+  'Dominica',
+  'Dominican Rep.',
+  'Grenada',
+  'Haiti',
+  'Jamaica',
+  'Saint Lucia',
+  'St. Kitts and Nevis',
+  'St. Vin. and Gren.',
+  'Trinidad and Tobago',
+])
+
 const middleEastCountryNames = new Set([
   'Bahrain',
   'Cyprus',
@@ -481,6 +497,13 @@ export const worldCountrySubsetConfigs: QuizSubsetConfig[] = [
     id: 'central-america',
     regionNames: Array.from(centralAmericaCountryNames),
     title: 'Central America',
+  },
+  {
+    description:
+      'Focus on the sovereign island states of the Caribbean.',
+    id: 'caribbean',
+    regionNames: Array.from(caribbeanCountryNames),
+    title: 'The Caribbean',
   },
   {
     description:
