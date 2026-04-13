@@ -356,6 +356,16 @@ h2 {
   fill: #f5ead3;
 }
 
+.map-region.is-inactive,
+.map-region.status-inactive {
+  fill: rgba(239, 225, 194, 0.42);
+  stroke: rgba(32, 59, 59, 0.34);
+}
+
+.map-region.is-inactive:hover {
+  fill: rgba(239, 225, 194, 0.42);
+}
+
 .map-region.is-preview-selected {
   fill: var(--preview-soft);
   stroke: var(--preview-deep);
@@ -767,6 +777,50 @@ h2 {
   padding: 0.55rem 0.8rem;
 }
 
+.subset-controls {
+  display: grid;
+  gap: 0.6rem;
+}
+
+.subset-note {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.88rem;
+}
+
+.subset-chip-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.subset-chip {
+  border: 1px solid rgba(23, 37, 31, 0.14);
+  border-radius: 999px;
+  padding: 0.5rem 0.8rem;
+  background: rgba(255, 255, 255, 0.44);
+  color: var(--ink);
+  font-family: var(--font-ui);
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  transition:
+    transform 0.15s ease,
+    border-color 0.15s ease,
+    background-color 0.15s ease;
+}
+
+.subset-chip:hover {
+  transform: translateY(-1px);
+  border-color: rgba(23, 37, 31, 0.24);
+}
+
+.subset-chip.is-active {
+  border-color: rgba(47, 92, 168, 0.34);
+  background: rgba(75, 127, 215, 0.14);
+  color: var(--preview-deep);
+}
+
 .legend-row {
   display: flex;
   flex-wrap: wrap;
@@ -787,6 +841,12 @@ h2 {
 
 .legend-chip.idle {
   border: 1px solid rgba(23, 37, 31, 0.16);
+}
+
+.legend-chip.inactive {
+  border: 1px solid rgba(23, 37, 31, 0.12);
+  background: rgba(255, 255, 255, 0.24);
+  color: var(--muted);
 }
 
 .legend-chip.preview {

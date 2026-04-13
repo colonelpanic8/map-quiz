@@ -10,11 +10,17 @@ import {
 } from 'react'
 import clsx from 'clsx'
 import { defaultQuizId, quizzes } from './data/quizzes.ts'
-import type { QuizRegion } from './lib/quiz-builder.ts'
+import type {
+  MapQuizDefinition,
+  QuizBounds,
+  QuizMapTransform,
+  QuizRegion,
+} from './lib/quiz-builder.ts'
 
 type AssignmentMap = Record<string, string | null>
 
 type ResultStatus = 'correct' | 'incorrect' | 'missing'
+type RegionStatus = ResultStatus | 'assigned' | 'idle' | 'inactive'
 type MapTransform = { scale: number; x: number; y: number }
 type MapPoint = { x: number; y: number }
 type TrackedPointer = MapPoint & { clientX: number; clientY: number }
@@ -50,6 +56,7 @@ const SMALL_REGION_MARKER_THIN_MAX_DIMENSION = 28
 const SMALL_REGION_MARKER_MIN_DOT_RADIUS = 3.4
 const SMALL_REGION_MARKER_MAX_DOT_RADIUS = 6.8
 const SMALL_REGION_MARKER_MIN_HIT_RADIUS = 10.5
+const DEFAULT_SUBSET_VIEW_PADDING = 28
 
 type RegionOverlayLabel = {
   fontSize: number
@@ -104,7 +111,11 @@ function getQuizDefinition(quizId: string) {
   return quizzes.find((entry) => entry.id === quizId) ?? quizzes[0]
 }
 
-function getDefaultMapTransform(
+function buildRegionById(quiz: MapQuizDefinition) {
+  return Object.fromEntries(quiz.regions.map((region) => [region.id, region]))
+}
+
+function getBaseMapTransform(
   quiz: Pick<ReturnType<typeof getQuizDefinition>, 'initialMapTransform' | 'viewBox'>,
 ): MapTransform {
   return clampMapTransform(
@@ -115,6 +126,140 @@ function getDefaultMapTransform(
     },
     quiz.viewBox,
   )
+}
+
+function getDefaultActiveSubsetIds(quiz: MapQuizDefinition) {
+  return quiz.defaultActiveSubsetIds ?? []
+}
+
+function getSubsetById(quiz: MapQuizDefinition) {
+  return new Map((quiz.subsets ?? []).map((subset) => [subset.id, subset]))
+}
+
+function getActiveSubsets(quiz: MapQuizDefinition, activeSubsetIds: string[]) {
+  if (!quiz.subsets?.length || activeSubsetIds.length === 0) {
+    return []
+  }
+
+  const subsetById = getSubsetById(quiz)
+
+  return activeSubsetIds.flatMap((subsetId) => {
+    const subset = subsetById.get(subsetId)
+    return subset ? [subset] : []
+  })
+}
+
+function getActiveRegionIdSet(quiz: MapQuizDefinition, activeSubsetIds: string[]) {
+  if (!quiz.subsets?.length || activeSubsetIds.length === 0) {
+    return new Set(quiz.regions.map((region) => region.id))
+  }
+
+  return new Set(
+    getActiveSubsets(quiz, activeSubsetIds).flatMap((subset) => subset.regionIds),
+  )
+}
+
+function unionBounds(boundsCollection: QuizBounds[]) {
+  if (boundsCollection.length === 0) {
+    return null
+  }
+
+  return boundsCollection.reduce<QuizBounds>(
+    (bounds, currentBounds) => ({
+      maxX: Math.max(bounds.maxX, currentBounds.maxX),
+      maxY: Math.max(bounds.maxY, currentBounds.maxY),
+      minX: Math.min(bounds.minX, currentBounds.minX),
+      minY: Math.min(bounds.minY, currentBounds.minY),
+    }),
+    boundsCollection[0],
+  )
+}
+
+function getBoundsForRegionIds(
+  regionIds: string[],
+  regionById: Record<string, QuizRegion>,
+) {
+  return unionBounds(
+    regionIds.flatMap((regionId) =>
+      regionById[regionId] ? [regionById[regionId].bounds] : [],
+    ),
+  )
+}
+
+function getBoundsForMapTransform(
+  transform: QuizMapTransform,
+  viewBox: { height: number; width: number },
+): QuizBounds {
+  const clampedTransform = clampMapTransform(transform, viewBox)
+
+  return {
+    maxX: (viewBox.width - clampedTransform.x) / clampedTransform.scale,
+    maxY: (viewBox.height - clampedTransform.y) / clampedTransform.scale,
+    minX: -clampedTransform.x / clampedTransform.scale,
+    minY: -clampedTransform.y / clampedTransform.scale,
+  }
+}
+
+function getMapTransformForBounds(
+  bounds: QuizBounds,
+  viewBox: { height: number; width: number },
+) {
+  const contentWidth = Math.max(1, bounds.maxX - bounds.minX)
+  const contentHeight = Math.max(1, bounds.maxY - bounds.minY)
+  const padding = Math.min(
+    DEFAULT_SUBSET_VIEW_PADDING,
+    viewBox.width * 0.08,
+    viewBox.height * 0.08,
+  )
+  const availableWidth = Math.max(1, viewBox.width - padding * 2)
+  const availableHeight = Math.max(1, viewBox.height - padding * 2)
+  const scale = Math.max(
+    MIN_MAP_SCALE,
+    Math.min(availableWidth / contentWidth, availableHeight / contentHeight),
+  )
+  const x =
+    padding +
+    (availableWidth - contentWidth * scale) / 2 -
+    bounds.minX * scale
+  const y =
+    padding +
+    (availableHeight - contentHeight * scale) / 2 -
+    bounds.minY * scale
+
+  return clampMapTransform(
+    {
+      scale,
+      x,
+      y,
+    },
+    viewBox,
+  )
+}
+
+function getDefaultMapTransform(
+  quiz: MapQuizDefinition,
+  regionById: Record<string, QuizRegion>,
+  activeSubsetIds: string[],
+): MapTransform {
+  const activeSubsets = getActiveSubsets(quiz, activeSubsetIds)
+  if (activeSubsets.length === 0) {
+    return getBaseMapTransform(quiz)
+  }
+
+  const subsetBounds = unionBounds(
+    activeSubsets.flatMap((subset) => {
+      if (subset.initialMapTransform) {
+        return [getBoundsForMapTransform(subset.initialMapTransform, quiz.viewBox)]
+      }
+
+      const bounds = getBoundsForRegionIds(subset.viewportRegionIds, regionById)
+      return bounds ? [bounds] : []
+    }),
+  )
+
+  return subsetBounds
+    ? getMapTransformForBounds(subsetBounds, quiz.viewBox)
+    : getBaseMapTransform(quiz)
 }
 
 function getDistance(firstPoint: MapPoint, secondPoint: MapPoint) {
@@ -333,9 +478,14 @@ function getSmallRegionMarker(
 
 function App() {
   const defaultQuiz = getQuizDefinition(defaultQuizId)
+  const defaultActiveSubsetIds = getDefaultActiveSubsetIds(defaultQuiz)
+  const defaultRegionById = buildRegionById(defaultQuiz)
   const [quizId, setQuizId] = useState(defaultQuizId)
   const [assignments, setAssignments] = useState<AssignmentMap>(() =>
     buildEmptyAssignments(defaultQuizId),
+  )
+  const [activeSubsetIds, setActiveSubsetIds] = useState<string[]>(
+    defaultActiveSubsetIds,
   )
   const [selectedRegionId, setSelectedRegionId] = useState<string | null>(null)
   const [selectedAnswerId, setSelectedAnswerId] = useState<string | null>(null)
@@ -352,7 +502,11 @@ function App() {
   const [isBankPanelOpen, setIsBankPanelOpen] = useState(false)
   const [isResultsPanelOpen, setIsResultsPanelOpen] = useState(false)
   const [mapTransform, setMapTransform] = useState<MapTransform>(() =>
-    getDefaultMapTransform(defaultQuiz),
+    getDefaultMapTransform(
+      defaultQuiz,
+      defaultRegionById,
+      defaultActiveSubsetIds,
+    ),
   )
   const [selectionMenu, setSelectionMenu] = useState<SelectionMenuState | null>(
     null,
@@ -366,9 +520,16 @@ function App() {
   const suppressRegionClickTimeoutRef = useRef<number | null>(null)
 
   const quiz = getQuizDefinition(quizId)
-  const defaultMapTransform = getDefaultMapTransform(quiz)
-  const regionById = Object.fromEntries(
-    quiz.regions.map((region) => [region.id, region]),
+  const regionById = buildRegionById(quiz)
+  const activeSubsets = getActiveSubsets(quiz, activeSubsetIds)
+  const activeRegionIdSet = getActiveRegionIdSet(quiz, activeSubsetIds)
+  const activeRegions = quiz.regions.filter((region) =>
+    activeRegionIdSet.has(region.id),
+  )
+  const defaultMapTransform = getDefaultMapTransform(
+    quiz,
+    regionById,
+    activeSubsetIds,
   )
 
   const countdownNow = submittedAt ?? clockNow
@@ -380,7 +541,7 @@ function App() {
   const remainingSeconds = timerIsActive
     ? Math.max(0, quiz.timeLimitSeconds - elapsedSeconds)
     : null
-  const assignedCount = Object.values(assignments).filter(Boolean).length
+  const assignedCount = activeRegions.filter((region) => assignments[region.id]).length
   const isSubmitted =
     submittedAt !== null ||
     (startedAt !== null && timerIsActive && remainingSeconds === 0)
@@ -415,7 +576,7 @@ function App() {
     return placement
   }, {})
 
-  const results = quiz.regions
+  const results = activeRegions
     .map((region) => {
       const guessId = assignments[region.id]
       let status: ResultStatus = 'missing'
@@ -455,9 +616,10 @@ function App() {
   const missingCount = results.filter(
     (result) => result.status === 'missing',
   ).length
+  const activeRegionCount = activeRegions.length
 
   function getMatchingAnswers(query: string) {
-    return quiz.regions
+    return activeRegions
       .map((region) => ({
         matchRank: getAnswerMatchRank(region.name, region.aliases, query),
         region,
@@ -504,16 +666,20 @@ function App() {
   const selectedRegionGuess = selectedRegionGuessId
     ? regionById[selectedRegionGuessId]
     : null
-  const labelOverlayRegions = [...quiz.regions].sort(
+  const labelOverlayRegions = [...activeRegions].sort(
     (left, right) =>
       Number(selectedRegionId === left.id) - Number(selectedRegionId === right.id),
   )
+  const activeSubsetSummary =
+    activeSubsets.length === 0
+      ? 'Whole board'
+      : activeSubsets.map((subset) => subset.title).join(' · ')
   const mapIsReset =
     mapTransform.scale === defaultMapTransform.scale &&
     mapTransform.x === defaultMapTransform.x &&
     mapTransform.y === defaultMapTransform.y
   const compactQuizSummary = isSubmitted
-    ? `${correctCount}/${quiz.regions.length} correct`
+    ? `${correctCount}/${activeRegionCount} correct`
     : timerIsActive && remainingSeconds !== null
       ? `${formatTime(remainingSeconds)} left`
       : 'Untimed'
@@ -888,14 +1054,27 @@ function App() {
     finishMapPointerGesture(event.pointerId, event.currentTarget)
   }
 
-  function resetQuizState(nextQuizId: string) {
+  function resetQuizState(
+    nextQuizId: string,
+    options?: {
+      nextActiveSubsetIds?: string[]
+      preserveAssignments?: boolean
+    },
+  ) {
     const nextQuiz = getQuizDefinition(nextQuizId)
+    const nextRegionById = buildRegionById(nextQuiz)
+    const nextActiveSubsetIds =
+      options?.nextActiveSubsetIds ?? getDefaultActiveSubsetIds(nextQuiz)
 
-    setAssignments(buildEmptyAssignments(nextQuizId))
+    if (!options?.preserveAssignments) {
+      setAssignments(buildEmptyAssignments(nextQuizId))
+    }
+    setActiveSubsetIds(nextActiveSubsetIds)
     setSelectedAnswerId(null)
     setSelectedRegionId(null)
     setBankQuery('')
-    closeSelectionMenu()
+    setPickerQuery('')
+    setSelectionMenu(null)
     setStartedAt(null)
     setSubmittedAt(null)
     setCountedElapsedMs(0)
@@ -903,7 +1082,9 @@ function App() {
     setClockNow(getNow())
     setIsResultsPanelOpen(false)
     clearMapGestures()
-    setMapTransform(getDefaultMapTransform(nextQuiz))
+    setMapTransform(
+      getDefaultMapTransform(nextQuiz, nextRegionById, nextActiveSubsetIds),
+    )
   }
 
   function ensureStarted(now?: number) {
@@ -961,7 +1142,7 @@ function App() {
     regionId: string,
     event?: Pick<ReactPointerEvent<SVGSVGElement> | ReactMouseEvent<SVGPathElement>, 'clientX' | 'clientY'>,
   ) {
-    if (suppressRegionClickRef.current) {
+    if (suppressRegionClickRef.current || !activeRegionIdSet.has(regionId)) {
       return
     }
 
@@ -1021,7 +1202,9 @@ function App() {
   }
 
   function handleReset() {
-    resetQuizState(quiz.id)
+    resetQuizState(quiz.id, {
+      nextActiveSubsetIds: activeSubsetIds,
+    })
   }
 
   function clearSelectedRegion() {
@@ -1070,6 +1253,24 @@ function App() {
     resetQuizState(nextQuizId)
   }
 
+  function handleSubsetToggle(subsetId: string) {
+    const nextActiveSubsetIds = activeSubsetIds.includes(subsetId)
+      ? activeSubsetIds.filter((currentSubsetId) => currentSubsetId !== subsetId)
+      : [...activeSubsetIds, subsetId]
+
+    resetQuizState(quiz.id, {
+      nextActiveSubsetIds,
+      preserveAssignments: true,
+    })
+  }
+
+  function clearSubsetFilters() {
+    resetQuizState(quiz.id, {
+      nextActiveSubsetIds: [],
+      preserveAssignments: true,
+    })
+  }
+
   function getAnswerStatus(answerId: string) {
     const placedOnRegionId = answerPlacement[answerId]
     if (!isSubmitted) {
@@ -1083,7 +1284,11 @@ function App() {
     return placedOnRegionId === answerId ? 'correct' : 'misplaced'
   }
 
-  function getRegionStatus(regionId: string) {
+  function getRegionStatus(regionId: string): RegionStatus {
+    if (!activeRegionIdSet.has(regionId)) {
+      return 'inactive'
+    }
+
     const guessId = assignments[regionId]
     if (!isSubmitted) {
       return guessId ? 'assigned' : 'idle'
@@ -1121,9 +1326,14 @@ function App() {
       }`
     }
 
+    const scopeSummary =
+      activeSubsets.length === 0
+        ? `Whole board active • ${activeRegionCount} regions.`
+        : `Active subsets: ${activeSubsetSummary} • ${activeRegionCount} regions.`
+
     return isSubmitted
       ? 'Click a region to inspect it after grading.'
-      : 'Click a region to open the picker, or choose a label from the bank.'
+      : `${scopeSummary} Click a region to open the picker, or choose a label from the bank.`
   })()
 
   return (
@@ -1161,6 +1371,7 @@ function App() {
                   const guessId = assignments[region.id]
                   const guessName = guessId ? regionById[guessId].name : null
                   const regionStatus = getRegionStatus(region.id)
+                  const isActiveRegion = activeRegionIdSet.has(region.id)
                   const isSelectedRegion = selectedRegionId === region.id
                   const strokeWidth = getMapStrokeWidth(mapTransform.scale, {
                     isPreviewSelected: !isSubmitted && isSelectedRegion,
@@ -1173,6 +1384,7 @@ function App() {
                         data-region-id={region.id}
                         d={region.path}
                         className={clsx('map-region', `status-${regionStatus}`, {
+                          'is-inactive': !isActiveRegion,
                           'is-preview-selected': !isSubmitted && isSelectedRegion,
                           'is-result-selected': isSubmitted && isSelectedRegion,
                         })}
@@ -1180,7 +1392,9 @@ function App() {
                         vectorEffect="non-scaling-stroke"
                       >
                         <title>
-                          {isSubmitted
+                          {!isActiveRegion
+                            ? `${region.name} • context only on the current board`
+                            : isSubmitted
                             ? `${region.name}${
                                 guessName ? ` • your label: ${guessName}` : ' • blank'
                               }`
@@ -1475,6 +1689,43 @@ function App() {
                       </div>
                     ) : null}
 
+                    {quiz.subsets?.length ? (
+                      <div className="subset-controls">
+                        <label className="field-label">Subsets</label>
+                        <p className="subset-note">
+                          {activeSubsets.length === 0
+                            ? 'No subset filters selected. The whole board is active.'
+                            : 'Active subset filters control both the answer bank and Reset view.'}
+                        </p>
+                        <div className="subset-chip-grid">
+                          <button
+                            type="button"
+                            className={clsx('subset-chip', {
+                              'is-active': activeSubsets.length === 0,
+                            })}
+                            onClick={clearSubsetFilters}
+                            aria-pressed={activeSubsets.length === 0}
+                          >
+                            Whole board
+                          </button>
+                          {quiz.subsets.map((subset) => (
+                            <button
+                              key={subset.id}
+                              type="button"
+                              className={clsx('subset-chip', {
+                                'is-active': activeSubsetIds.includes(subset.id),
+                              })}
+                              onClick={() => handleSubsetToggle(subset.id)}
+                              aria-pressed={activeSubsetIds.includes(subset.id)}
+                              title={subset.description}
+                            >
+                              {subset.title}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    ) : null}
+
                     <label
                       className="toggle-row compact-toggle-row"
                       htmlFor="disable-timer"
@@ -1494,8 +1745,9 @@ function App() {
 
                   <div className="quiz-meta-row" aria-label="Quiz summary">
                     <span className="quiz-meta-chip">
-                      {assignedCount}/{quiz.regions.length} placed
+                      {assignedCount}/{activeRegionCount} placed
                     </span>
+                    <span className="quiz-meta-chip subdued">{activeSubsetSummary}</span>
                     <span className="quiz-meta-chip">{compactQuizSummary}</span>
                     {isSubmitted ? (
                       <span className="quiz-meta-chip subdued">
@@ -1523,6 +1775,7 @@ function App() {
                   </div>
 
                   <div className="legend-row">
+                    <span className="legend-chip inactive">Context</span>
                     <span className="legend-chip preview">Preview</span>
                     <span className="legend-chip idle">Empty</span>
                     <span className="legend-chip assigned">Placed</span>
@@ -1613,7 +1866,7 @@ function App() {
                         </div>
                         <div className="panel-header-tools">
                           <span className="bank-count">
-                            {correctCount}/{quiz.regions.length} correct
+                            {correctCount}/{activeRegionCount} correct
                           </span>
                           <button
                             type="button"
@@ -1668,7 +1921,7 @@ function App() {
                   <span className="hud-toggle-label">Quiz</span>
                   <strong>{quiz.title}</strong>
                   <span className="hud-toggle-meta">
-                    {assignedCount}/{quiz.regions.length} placed | {compactQuizSummary}
+                    {assignedCount}/{activeRegionCount} placed | {compactQuizSummary}
                   </span>
                 </button>
               ) : null}
@@ -1696,7 +1949,7 @@ function App() {
                   aria-expanded={isResultsPanelOpen}
                 >
                   <span className="hud-toggle-label">Results</span>
-                  <strong>{correctCount}/{quiz.regions.length} correct</strong>
+                  <strong>{correctCount}/{activeRegionCount} correct</strong>
                   <span className="hud-toggle-meta">{compactResultsSummary}</span>
                 </button>
               ) : null}

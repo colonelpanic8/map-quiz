@@ -17,10 +17,24 @@ export type QuizProjection =
   | 'mercator'
   | 'naturalEarth1'
 
+export type QuizMapTransform = {
+  scale: number
+  x: number
+  y: number
+}
+
+export type QuizBounds = {
+  minX: number
+  minY: number
+  maxX: number
+  maxY: number
+}
+
 export type QuizRegion = {
   id: string
   name: string
   aliases: string[]
+  bounds: QuizBounds
   labelBounds: {
     height: number
     width: number
@@ -32,6 +46,15 @@ export type QuizRegion = {
   path: string
 }
 
+export type QuizSubset = {
+  id: string
+  title: string
+  description?: string
+  regionIds: string[]
+  viewportRegionIds: string[]
+  initialMapTransform?: QuizMapTransform
+}
+
 export type MapQuizDefinition = {
   id: string
   title: string
@@ -39,11 +62,9 @@ export type MapQuizDefinition = {
   prompt: string
   credit: string
   timeLimitSeconds: number
-  initialMapTransform?: {
-    scale: number
-    x: number
-    y: number
-  }
+  initialMapTransform?: QuizMapTransform
+  defaultActiveSubsetIds?: string[]
+  subsets?: QuizSubset[]
   viewBox: {
     width: number
     height: number
@@ -58,11 +79,7 @@ type BaseQuizOptions = {
   prompt: string
   credit: string
   timeLimitSeconds: number
-  initialMapTransform?: {
-    scale: number
-    x: number
-    y: number
-  }
+  initialMapTransform?: QuizMapTransform
 }
 
 type GeoQuizOptions = BaseQuizOptions & {
@@ -249,6 +266,12 @@ export function createGeoQuiz({
     return [
       {
         aliases: resolveAliases(regionId, regionName, aliasesById, aliasesByName),
+        bounds: {
+          maxX,
+          maxY,
+          minX,
+          minY,
+        },
         id: regionId,
         labelBounds: {
           height: Math.max(0, maxY - minY),
@@ -359,6 +382,12 @@ export function createPolygonQuiz({
 
         return {
           aliases: dedupeAliases(region.aliases ?? []),
+          bounds: {
+            maxX: bounds.maxX,
+            maxY: bounds.maxY,
+            minX: bounds.minX,
+            minY: bounds.minY,
+          },
           id: region.id,
           labelBounds: {
             height: Math.max(0, bounds.maxY - bounds.minY),

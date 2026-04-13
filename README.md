@@ -5,9 +5,12 @@ A batch-submission map quiz system. The interaction is inspired by Sporcle pictu
 ## What it ships with
 
 - `Find the US States`
-- `Countries of Europe`
-- `Countries of the Middle East`
 - `Countries of the World`
+
+Each board can optionally expose subset filters. The sample data now includes:
+
+- `Find the US States` with filters such as `Original 13`, `Midwest`, and `South`
+- `Countries of the World` with overlapping filters such as `Europe`, `Africa`, and `Middle East`
 
 Both are built from atlas packages rather than hard-coded SVGs:
 
@@ -49,11 +52,21 @@ type MapQuizDefinition = {
   prompt: string
   credit: string
   timeLimitSeconds: number
+  initialMapTransform?: { scale: number; x: number; y: number }
+  defaultActiveSubsetIds?: string[]
+  subsets?: Array<{
+    id: string
+    title: string
+    regionIds: string[]
+    viewportRegionIds: string[]
+    initialMapTransform?: { scale: number; x: number; y: number }
+  }>
   viewBox: { width: number; height: number }
   regions: Array<{
     id: string
     name: string
     aliases: string[]
+    bounds: { minX: number; minY: number; maxX: number; maxY: number }
     path: string
   }>
 }
@@ -116,6 +129,8 @@ createPolygonQuiz({
 
 - Click a region and then a label, or a label and then a region.
 - Placements stay editable until submission.
+- Subset filters can narrow the active answer bank without switching to a separate quiz.
+- Subset filters may overlap, and `Reset view` fits the union of the active subset viewports.
 - The `Disable timer` toggle starts on by default; uncheck it for timed rounds.
 - Search works against names plus aliases and abbreviations.
 - `Grade Map` checks every region at once.

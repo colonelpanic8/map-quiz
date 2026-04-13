@@ -3,7 +3,12 @@ import type { GeometryCollection, Topology } from 'topojson-specification'
 import usStatesTopology from 'us-atlas/states-10m.json'
 import regionalCountriesTopology from 'world-atlas/countries-50m.json'
 import worldCountriesTopology from 'world-atlas/countries-110m.json'
-import { createTopoQuiz } from '../lib/quiz-builder.ts'
+import {
+  createTopoQuiz,
+  type MapQuizDefinition,
+  type QuizMapTransform,
+  type QuizSubset,
+} from '../lib/quiz-builder.ts'
 
 const usStateAliases: Record<string, string[]> = {
   Alabama: ['AL'],
@@ -59,6 +64,54 @@ const usStateAliases: Record<string, string[]> = {
 }
 
 const usStateNames = new Set(Object.keys(usStateAliases))
+
+const originalThirteenStateNames = [
+  'Connecticut',
+  'Delaware',
+  'Georgia',
+  'Maryland',
+  'Massachusetts',
+  'New Hampshire',
+  'New Jersey',
+  'New York',
+  'North Carolina',
+  'Pennsylvania',
+  'Rhode Island',
+  'South Carolina',
+  'Virginia',
+]
+
+const midwestStateNames = [
+  'Illinois',
+  'Indiana',
+  'Iowa',
+  'Kansas',
+  'Michigan',
+  'Minnesota',
+  'Missouri',
+  'Nebraska',
+  'North Dakota',
+  'Ohio',
+  'South Dakota',
+  'Wisconsin',
+]
+
+const southernStateNames = [
+  'Alabama',
+  'Arkansas',
+  'Florida',
+  'Georgia',
+  'Kentucky',
+  'Louisiana',
+  'Mississippi',
+  'North Carolina',
+  'Oklahoma',
+  'South Carolina',
+  'Tennessee',
+  'Texas',
+  'Virginia',
+  'West Virginia',
+]
 
 const worldCountryAliases: Record<string, string[]> = {
   Andorra: ['Principality of Andorra'],
@@ -421,13 +474,161 @@ const middleEastCountryAliases: Record<string, string[]> = {
   Yemen: ['Republic of Yemen'],
 }
 
-export const quizzes = [
+type QuizSubsetConfig = {
+  id: string
+  title: string
+  description?: string
+  regionNames: string[]
+  viewportRegionNames?: string[]
+  initialMapTransform?: QuizMapTransform
+}
+
+function dedupeStrings(values: string[]) {
+  return Array.from(new Set(values))
+}
+
+function mergeAliasMaps(...maps: Array<Record<string, string[]>>) {
+  return maps.reduce<Record<string, string[]>>((merged, aliasesByName) => {
+    for (const [name, aliases] of Object.entries(aliasesByName)) {
+      merged[name] = dedupeStrings([...(merged[name] ?? []), ...aliases])
+    }
+
+    return merged
+  }, {})
+}
+
+function withoutNames(names: Iterable<string>, excludedNames: string[]) {
+  const excludedNameSet = new Set(excludedNames)
+  return Array.from(names).filter((name) => !excludedNameSet.has(name))
+}
+
+function buildRegionIdsFromNames(
+  quiz: MapQuizDefinition,
+  regionNames: string[],
+  subsetId: string,
+) {
+  const regionIdByName = new Map(quiz.regions.map((region) => [region.name, region.id]))
+
+  return regionNames.map((regionName) => {
+    const regionId = regionIdByName.get(regionName)
+    if (!regionId) {
+      throw new Error(
+        `Subset "${subsetId}" references unknown region "${regionName}" on quiz "${quiz.id}".`,
+      )
+    }
+
+    return regionId
+  })
+}
+
+function withQuizSubsets(
+  quiz: MapQuizDefinition,
+  subsetConfigs: QuizSubsetConfig[],
+  options?: { defaultActiveSubsetIds?: string[] },
+): MapQuizDefinition {
+  const subsets: QuizSubset[] = subsetConfigs.map((subsetConfig) => ({
+    description: subsetConfig.description,
+    id: subsetConfig.id,
+    initialMapTransform: subsetConfig.initialMapTransform,
+    regionIds: buildRegionIdsFromNames(
+      quiz,
+      subsetConfig.regionNames,
+      subsetConfig.id,
+    ),
+    title: subsetConfig.title,
+    viewportRegionIds: buildRegionIdsFromNames(
+      quiz,
+      subsetConfig.viewportRegionNames ?? subsetConfig.regionNames,
+      subsetConfig.id,
+    ),
+  }))
+
+  return {
+    ...quiz,
+    defaultActiveSubsetIds: options?.defaultActiveSubsetIds ?? [],
+    subsets,
+  }
+}
+
+const countryAliases = mergeAliasMaps(
+  worldCountryAliases,
+  europeCountryAliases,
+  africaCountryAliases,
+  southAmericaCountryAliases,
+  centralAmericaCountryAliases,
+  middleEastCountryAliases,
+)
+
+const usStateSubsetConfigs: QuizSubsetConfig[] = [
+  {
+    description:
+      'Practice the original thirteen colonies along the Atlantic seaboard.',
+    id: 'original-thirteen',
+    regionNames: originalThirteenStateNames,
+    title: 'Original 13',
+  },
+  {
+    description:
+      'Practice the core Midwestern states from the Plains through the Great Lakes.',
+    id: 'midwest',
+    regionNames: midwestStateNames,
+    title: 'Midwest',
+  },
+  {
+    description:
+      'Practice a broad South grouping spanning the Southeast, Appalachia, and Texas.',
+    id: 'south',
+    regionNames: southernStateNames,
+    title: 'South',
+  },
+]
+
+const worldCountrySubsetConfigs: QuizSubsetConfig[] = [
+  {
+    description:
+      'Focus on Europe, while keeping the viewport tight enough that western Russia does not force a full Eurasia frame.',
+    id: 'europe',
+    regionNames: Array.from(europeCountryNames),
+    title: 'Europe',
+    viewportRegionNames: withoutNames(europeCountryNames, ['Russia']),
+  },
+  {
+    description:
+      'Focus on African countries and nearby island states.',
+    id: 'africa',
+    regionNames: Array.from(africaCountryNames),
+    title: 'Africa',
+  },
+  {
+    description:
+      'Focus on the sovereign countries of South America.',
+    id: 'south-america',
+    regionNames: Array.from(southAmericaCountryNames),
+    title: 'South America',
+  },
+  {
+    description:
+      'Focus on the Central American isthmus from Belize to Panama.',
+    id: 'central-america',
+    regionNames: Array.from(centralAmericaCountryNames),
+    title: 'Central America',
+  },
+  {
+    description:
+      'Focus on the Middle East and eastern Mediterranean, with intentional overlap into North Africa and Anatolia.',
+    id: 'middle-east',
+    regionNames: Array.from(middleEastCountryNames),
+    title: 'Middle East',
+  },
+]
+
+const usStatesQuiz = withQuizSubsets(
   createTopoQuiz({
     aliasesByName: usStateAliases,
     credit:
       'US geometry comes from us-atlas. The interaction is inspired by Sporcle picture-click quizzes, but this version grades the whole map in one batch.',
     description:
-      'Place every US state on the map before grading. You can work in any order and revise placements until you submit.',
+      'Place every active US state on the map before grading. Subset filters let you practice overlapping state groupings without switching to a different board.',
     filterFeature: (feature) =>
       typeof feature.properties.name === 'string' &&
       usStateNames.has(feature.properties.name),
@@ -435,113 +636,21 @@ export const quizzes = [
     objectName: 'states',
     projection: 'albersUsa',
     prompt:
-      'Select a region and then a label, or choose a label first and click the map. Nothing is checked until you hit Grade Map.',
+      'Select a region and then a label, or choose a label first and click the map. Subset filters can narrow the board without changing the underlying map.',
     timeLimitSeconds: 7 * 60,
     title: 'Find the US States',
     topology: usStatesTopology as unknown as Topology,
   }),
+  usStateSubsetConfigs,
+)
+
+const worldCountriesQuiz = withQuizSubsets(
   createTopoQuiz({
-    aliasesByName: europeCountryAliases,
-    credit:
-      'Europe geometry is filtered from world-atlas at 50m resolution so the microstates remain visible and selectable.',
-    description:
-      'Batch-label Europe on a tighter regional map, including commonly grouped transcontinental countries such as Armenia, Azerbaijan, Georgia, Russia, and Turkey.',
-    filterFeature: (feature) =>
-      typeof feature.properties.name === 'string' &&
-      europeCountryNames.has(feature.properties.name),
-    height: 700,
-    id: 'europe-countries',
-    objectName: 'countries',
-    projectionScaleFactor: 1.9375,
-    projection: 'mercator',
-    prompt:
-      'Place every European country before grading. Zoom in for the microstates and island countries when you need more precision.',
-    timeLimitSeconds: 12 * 60,
-    title: 'Countries of Europe',
-    topology: regionalCountriesTopology as unknown as Topology,
-  }),
-  createTopoQuiz({
-    aliasesByName: africaCountryAliases,
-    credit:
-      'Africa geometry is filtered from world-atlas at 50m resolution so the island states and narrow coastal countries remain selectable.',
-    description:
-      'Batch-label the countries of Africa on a regional map spanning the continent and its major island nations.',
-    filterFeature: (feature) =>
-      typeof feature.properties.name === 'string' &&
-      africaCountryNames.has(feature.properties.name),
-    height: 760,
-    id: 'africa-countries',
-    objectName: 'countries',
-    projection: 'mercator',
-    prompt:
-      'Place every African country before grading. Zoom in around West Africa, the Horn, and the Gulf of Guinea when borders get dense.',
-    timeLimitSeconds: 12 * 60,
-    title: 'Countries of Africa',
-    topology: regionalCountriesTopology as unknown as Topology,
-  }),
-  createTopoQuiz({
-    aliasesByName: southAmericaCountryAliases,
-    credit:
-      'South America geometry is filtered from world-atlas at 50m resolution so the continent stays detailed enough for the Andean corridor and the Guianas.',
-    description:
-      'Batch-label the sovereign countries of South America on a continent-scale regional map.',
-    filterFeature: (feature) =>
-      typeof feature.properties.name === 'string' &&
-      southAmericaCountryNames.has(feature.properties.name),
-    height: 760,
-    id: 'south-america-countries',
-    objectName: 'countries',
-    projection: 'mercator',
-    prompt:
-      'Place every South American country before grading. Zoom in along the Andes and the northern coast when neighboring borders get tight.',
-    timeLimitSeconds: 7 * 60,
-    title: 'Countries of South America',
-    topology: regionalCountriesTopology as unknown as Topology,
-  }),
-  createTopoQuiz({
-    aliasesByName: centralAmericaCountryAliases,
-    credit:
-      'Central America geometry is filtered from world-atlas at 50m resolution so the narrow isthmus countries remain distinct and selectable.',
-    description:
-      'Batch-label the sovereign countries of Central America on a regional map from Belize to Panama.',
-    filterFeature: (feature) =>
-      typeof feature.properties.name === 'string' &&
-      centralAmericaCountryNames.has(feature.properties.name),
-    height: 620,
-    id: 'central-america-countries',
-    objectName: 'countries',
-    projection: 'mercator',
-    prompt:
-      'Place every Central American country before grading. Zoom in along the Pacific side and around the Gulf of Honduras when borders get tight.',
-    timeLimitSeconds: 5 * 60,
-    title: 'Countries of Central America',
-    topology: regionalCountriesTopology as unknown as Topology,
-  }),
-  createTopoQuiz({
-    aliasesByName: middleEastCountryAliases,
-    credit:
-      'Middle East geometry is filtered from world-atlas at 50m resolution so the eastern Mediterranean and Gulf states remain easy to target.',
-    description:
-      'Batch-label the Middle East on a regional map spanning Egypt, the Levant, Anatolia, the Arabian Peninsula, and Iran.',
-    filterFeature: (feature) =>
-      typeof feature.properties.name === 'string' &&
-      middleEastCountryNames.has(feature.properties.name),
-    height: 680,
-    id: 'middle-east-countries',
-    objectName: 'countries',
-    projection: 'mercator',
-    prompt:
-      'Place every Middle Eastern country before grading. Zoom in around the Levant and the Gulf when neighboring countries crowd together.',
-    timeLimitSeconds: 8 * 60,
-    title: 'Countries of the Middle East',
-    topology: regionalCountriesTopology as unknown as Topology,
-  }),
-  createTopoQuiz({
-    aliasesByName: worldCountryAliases,
+    aliasesByName: countryAliases,
     credit:
       'World geometry is filtered from world-atlas at 50m resolution so microstates and island countries stay on the board without bringing in non-sovereign territories.',
     description:
-      'Batch-label the world with a fuller sovereign-country set, including small states that disappear at coarser map resolutions.',
+      'Treat the world as one large sovereign-country board. Subset filters can focus the active answer bank on overlapping regions such as Europe, Africa, and the Middle East without swapping to a separate quiz.',
     filterFeature: (feature) =>
       typeof feature.properties.name === 'string' &&
       worldCountryNames.has(feature.properties.name),
@@ -550,11 +659,14 @@ export const quizzes = [
     objectName: 'countries',
     projection: 'naturalEarth1',
     prompt:
-      'This is the same batch-submission flow at a larger scale: tiny countries get dot markers when they would otherwise disappear, and the whole board still grades in one batch.',
+      'This is the same batch-submission flow at world scale: tiny countries get dot markers when they would otherwise disappear, and subset filters control both the active answers and the reset viewport.',
     timeLimitSeconds: 20 * 60,
     title: 'Countries of the World',
     topology: regionalCountriesTopology as unknown as Topology,
   }),
-]
+  worldCountrySubsetConfigs,
+)
+
+export const quizzes = [usStatesQuiz, worldCountriesQuiz]
 
 export const defaultQuizId = quizzes[0].id
