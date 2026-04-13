@@ -328,6 +328,37 @@ const southeastAsiaCountryNames = new Set([
   'Vietnam',
 ])
 
+const coreAsiaCountryNames = new Set([
+  'Afghanistan',
+  'Bangladesh',
+  'Bhutan',
+  'China',
+  'India',
+  'Japan',
+  'Kazakhstan',
+  'Kyrgyzstan',
+  'Mongolia',
+  'Nepal',
+  'North Korea',
+  'Pakistan',
+  'South Korea',
+  'Sri Lanka',
+  'Taiwan',
+  'Tajikistan',
+  'Turkmenistan',
+  'Uzbekistan',
+  ...southeastAsiaCountryNames,
+])
+
+const asiaCountryNames = new Set([
+  ...coreAsiaCountryNames,
+  ...withoutNames(middleEastCountryNames, ['Egypt']),
+  'Armenia',
+  'Azerbaijan',
+  'Georgia',
+  'Russia',
+])
+
 const americasCountryNames = new Set([
   'Antigua and Barb.',
   'Argentina',
@@ -518,6 +549,21 @@ export const worldCountrySubsetConfigs: QuizSubsetConfig[] = [
     id: 'southeast-asia',
     regionNames: Array.from(southeastAsiaCountryNames),
     title: 'Southeast Asia',
+  },
+  {
+    description:
+      'Focus on South, Central, East, and Southeast Asia while excluding Russia and the Middle East-adjacent countries handled by other subsets.',
+    id: 'core-asia',
+    regionNames: Array.from(coreAsiaCountryNames),
+    title: 'Core Asia',
+  },
+  {
+    description:
+      'Focus on Asia broadly, including West Asia and Russia, while keeping Russia out of the viewport reset so the board stays legible.',
+    id: 'asia',
+    regionNames: Array.from(asiaCountryNames),
+    title: 'Asia',
+    viewportRegionNames: withoutNames(asiaCountryNames, ['Russia']),
   },
   {
     description:
