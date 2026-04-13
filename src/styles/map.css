@@ -1,0 +1,328 @@
+.map-stage {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  isolation: isolate;
+  background:
+    radial-gradient(circle at top, rgba(255, 255, 255, 0.36), transparent 32%),
+    linear-gradient(180deg, var(--sea) 0%, var(--sea-deep) 100%);
+  overscroll-behavior: none;
+}
+
+.map-stage::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at center, transparent 58%, rgba(18, 26, 29, 0.14) 100%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.08), transparent 24%);
+  z-index: 0;
+}
+
+.quiz-map {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: block;
+  width: 100%;
+  height: 100%;
+  background: var(--map-water-overlay);
+  touch-action: none;
+  cursor: default;
+}
+
+.quiz-map.is-pannable {
+  cursor: grab;
+}
+
+.quiz-map.is-dragging {
+  cursor: grabbing;
+}
+
+.map-water {
+  fill: none;
+}
+
+.map-region {
+  fill: #efe1c2;
+  stroke: rgba(32, 59, 59, 0.72);
+  stroke-width: 1.15;
+  transition:
+    fill 0.18s ease,
+    transform 0.18s ease,
+    stroke-width 0.18s ease;
+}
+
+.map-region:hover {
+  fill: #f5ead3;
+}
+
+.map-region.is-inactive,
+.map-region.status-inactive {
+  fill: rgba(239, 225, 194, 0.42);
+  stroke: rgba(32, 59, 59, 0.34);
+}
+
+.map-region.is-inactive:hover {
+  fill: rgba(239, 225, 194, 0.42);
+}
+
+.map-region.is-preview-selected {
+  fill: var(--preview-soft);
+  stroke: var(--preview-deep);
+  stroke-width: 3.4;
+  filter: drop-shadow(0 0 0.7rem rgba(75, 127, 215, 0.42));
+}
+
+.map-region.is-result-selected {
+  stroke: var(--preview-deep);
+  stroke-width: 3.2;
+  filter: drop-shadow(0 0 0.45rem rgba(75, 127, 215, 0.28));
+}
+
+.map-region.status-assigned {
+  fill: rgba(103, 144, 165, 0.92);
+}
+
+.map-region.status-correct {
+  fill: rgba(117, 160, 111, 0.95);
+}
+
+.map-region.status-incorrect {
+  fill: rgba(207, 106, 79, 0.94);
+}
+
+.map-region.status-missing {
+  fill: rgba(227, 191, 102, 0.92);
+}
+
+.map-region-label {
+  pointer-events: none;
+}
+
+.map-region-marker {
+  cursor: pointer;
+  transition:
+    opacity 0.18s ease,
+    transform 0.18s ease;
+}
+
+.map-region-marker-hitbox {
+  fill: rgba(0, 0, 0, 0.001);
+}
+
+.map-region-marker-ring,
+.map-region-marker-dot {
+  transition:
+    fill 0.18s ease,
+    stroke 0.18s ease;
+}
+
+.map-region-marker-ring {
+  fill: rgba(249, 243, 229, 0.78);
+  stroke: rgba(32, 59, 59, 0.24);
+  stroke-width: 1.25;
+}
+
+.map-region-marker-dot {
+  fill: #efe1c2;
+  stroke: rgba(32, 59, 59, 0.78);
+  stroke-width: 1.35;
+}
+
+.map-region-marker.status-assigned .map-region-marker-dot {
+  fill: rgba(103, 144, 165, 0.94);
+}
+
+.map-region-marker.status-correct .map-region-marker-dot {
+  fill: rgba(117, 160, 111, 0.95);
+}
+
+.map-region-marker.status-incorrect .map-region-marker-dot {
+  fill: rgba(207, 106, 79, 0.94);
+}
+
+.map-region-marker.status-missing .map-region-marker-dot {
+  fill: rgba(227, 191, 102, 0.92);
+}
+
+.map-region-marker.is-preview-selected .map-region-marker-ring,
+.map-region-marker.is-result-selected .map-region-marker-ring {
+  stroke: var(--preview-deep);
+}
+
+.map-region-marker.is-preview-selected .map-region-marker-dot,
+.map-region-marker.is-result-selected .map-region-marker-dot {
+  stroke: var(--preview-deep);
+  stroke-width: 1.7;
+}
+
+.map-region-marker.is-preview-selected .map-region-marker-ring {
+  fill: rgba(75, 127, 215, 0.12);
+}
+
+.map-region-label rect {
+  fill: rgba(249, 243, 229, 0.86);
+  stroke: rgba(47, 92, 168, 0.34);
+  stroke-width: 1;
+}
+
+.map-region-label text {
+  fill: rgba(23, 37, 31, 0.92);
+  font-family: var(--font-ui);
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-anchor: middle;
+  dominant-baseline: central;
+  paint-order: stroke;
+  stroke: rgba(249, 243, 229, 0.96);
+  stroke-linejoin: round;
+  stroke-width: 3px;
+}
+
+.map-region-label.is-selected text {
+  fill: var(--preview-deep);
+}
+
+.map-region-label.status-correct text {
+  fill: #315f2f;
+}
+
+.map-region-label.status-incorrect text {
+  fill: #8f3f2a;
+}
+
+.map-region-label.status-missing text {
+  fill: #7a5b0e;
+}
+
+.map-region-label.is-selected.status-correct text,
+.map-region-label.is-selected.status-incorrect text,
+.map-region-label.is-selected.status-missing text {
+  fill: var(--preview-deep);
+}
+
+.map-zoom-controls {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.45rem;
+  border: 1px solid rgba(23, 37, 31, 0.14);
+  border-radius: 999px;
+  background: rgba(249, 243, 229, 0.88);
+  backdrop-filter: blur(12px);
+  box-shadow: 0 10px 24px rgba(35, 39, 29, 0.12);
+}
+
+.map-zoom-readout {
+  min-width: 3ch;
+  padding: 0 0.3rem;
+  color: var(--muted);
+  font-family: var(--font-ui);
+  font-size: 0.76rem;
+  letter-spacing: 0.08em;
+  text-align: center;
+  text-transform: uppercase;
+}
+
+.map-zoom-button,
+.map-zoom-reset {
+  border: none;
+  border-radius: 999px;
+  background: rgba(23, 37, 31, 0.08);
+  color: var(--ink);
+}
+
+.map-zoom-button {
+  width: 2.25rem;
+  height: 2.25rem;
+  padding: 0;
+  font-family: var(--font-ui);
+  font-size: 1.2rem;
+  line-height: 1;
+}
+
+.map-zoom-reset {
+  padding: 0.55rem 0.9rem;
+  font-family: var(--font-ui);
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.map-zoom-button:hover:not(:disabled),
+.map-zoom-reset:hover:not(:disabled) {
+  background: rgba(23, 37, 31, 0.16);
+}
+
+.map-zoom-button:disabled,
+.map-zoom-reset:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.map-selection-menu {
+  position: fixed;
+  z-index: 5;
+  display: grid;
+  gap: 0.6rem;
+  padding: 0.85rem;
+  border: 1px solid rgba(23, 37, 31, 0.16);
+  border-radius: 20px;
+  background: rgba(249, 243, 229, 0.96);
+  backdrop-filter: blur(14px);
+  box-shadow: 0 18px 32px rgba(35, 39, 29, 0.18);
+  overflow: hidden;
+}
+
+.map-selection-header,
+.map-selection-actions {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.map-selection-title {
+  display: grid;
+  gap: 0.18rem;
+}
+
+.map-selection-subtitle {
+  color: var(--muted);
+  font-size: 0.92rem;
+}
+
+.map-selection-dismiss {
+  border: none;
+  border-radius: 999px;
+  padding: 0.45rem 0.7rem;
+  background: rgba(23, 37, 31, 0.08);
+  color: var(--ink);
+  font-family: var(--font-ui);
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.map-selection-note {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.84rem;
+}
+
+.map-selection-search,
+.map-selection-list {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.map-selection-list {
+  overflow: hidden;
+}
