@@ -207,9 +207,14 @@ export function QuizMap({
               isSubmitted,
             )
             const isSelectedRegion = selectedRegionId === region.id
+            const overlayRegion = isSubmitted
+              ? region
+              : guessId
+                ? regionById[guessId]
+                : null
             const overlayLabel = getRegionOverlayLabel(
               region,
-              guessId ? regionById[guessId] : null,
+              overlayRegion,
               isSelectedRegion,
               mapTransform.scale,
             )
