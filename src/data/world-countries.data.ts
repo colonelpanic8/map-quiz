@@ -120,6 +120,8 @@ const worldCountryExtraNames = new Set([
   'Vatican',
 ])
 
+const excludedWorldCountryNames = new Set(['Somaliland'])
+
 function getTopologyFeatureNames(topology: Topology, objectName: string) {
   const object = topology.objects[objectName]
   if (!object) {
@@ -141,7 +143,7 @@ export const worldCountryNames = new Set([
     'countries',
   ),
   ...worldCountryExtraNames,
-])
+].filter((name) => !excludedWorldCountryNames.has(name)))
 
 const europeCountryNames = new Set([
   'Albania',
